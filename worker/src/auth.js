@@ -83,29 +83,33 @@ async function verifyExtensionToken(token, env) {
   return normalizeClaims(JSON.parse(b64UrlToString(payloadB64)));
 }
 
+function claimString(value) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
 /**
  * @param {Record<string, unknown>} claims
  */
 function normalizeClaims(claims) {
-  const userId =
-    (typeof claims.user_id === "string" && claims.user_id) ||
-    (typeof claims.opaque_user_id === "string" && claims.opaque_user_id);
+  const opaqueUserId = claimString(claims.opaque_user_id);
+  const twitchUserId = claimString(claims.user_id);
+  // Opaque id stays the wallet key so sharing identity does not create a second viewer.
+  const userId = opaqueUserId || twitchUserId;
 
   if (!userId) throw new Error("token missing user id");
 
   return {
     userId,
-    opaqueUserId:
-      typeof claims.opaque_user_id === "string"
-        ? claims.opaque_user_id
-        : userId,
+    opaqueUserId: opaqueUserId || userId,
+    twitchUserId: twitchUserId || undefined,
     displayName:
       typeof claims.preferred_username === "string"
         ? claims.preferred_username
         : undefined,
     role: typeof claims.role === "string" ? claims.role : "viewer",
-    channelId:
-      typeof claims.channel_id === "string" ? claims.channel_id : undefined,
+    channelId: claimString(claims.channel_id) || undefined,
     isDev: false,
   };
 }

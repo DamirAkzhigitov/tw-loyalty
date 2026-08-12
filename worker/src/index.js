@@ -42,7 +42,9 @@ export default {
     }
 
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const assetRes = await env.ASSETS.fetch(request);
+      if (isOverlayPath(url.pathname)) return withNoStore(assetRes);
+      return assetRes;
     }
 
     return json({ error: "not_found" }, 404);
@@ -107,7 +109,7 @@ async function handleApi(request, env, url) {
       identity.displayName ||
       request.headers.get("X-Viewer-Name") ||
       request.headers.get("X-Dev-Display-Name") ||
-      (await helixDisplayName(body));
+      (await helixDisplayName(body, identity));
 
     const channelId =
       identity.channelId ||
@@ -181,25 +183,34 @@ function registryStub(env) {
 
 /**
  * @param {Record<string, unknown>} body
- * @param {{ userId: string }} identity
+ * @param {{ userId: string, twitchUserId?: string }} identity
  */
-async function helixDisplayName(body) {
+async function helixDisplayName(body, identity) {
   const token = typeof body.helixToken === "string" ? body.helixToken : "";
   const clientId = typeof body.clientId === "string" ? body.clientId : "";
-  if (!token || !clientId) return null;
-  try {
-    const res = await fetch("https://api.twitch.tv/helix/users", {
-      headers: {
-        "Client-Id": clientId,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.data?.[0]?.display_name || null;
-  } catch {
-    return null;
+  const twitchUserId =
+    (typeof body.twitchUserId === "string" && body.twitchUserId.trim()) ||
+    identity.twitchUserId ||
+    "";
+  if (!token || !clientId || !twitchUserId) return null;
+  const url = `https://api.twitch.tv/helix/users?id=${encodeURIComponent(twitchUserId)}`;
+  for (const scheme of ["Extension", "Bearer"]) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "Client-Id": clientId,
+          Authorization: `${scheme} ${token}`,
+        },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const name = data.data?.[0]?.display_name;
+      if (typeof name === "string" && name.trim()) return name.trim();
+    } catch {
+      // try the other auth scheme
+    }
   }
+  return null;
 }
 
 /**
@@ -223,6 +234,21 @@ function roomStub(env, channelId) {
   return env.LOYALTY.get(id);
 }
 
+function isOverlayPath(pathname) {
+  return pathname === "/overlay" || pathname.startsWith("/overlay/");
+}
+
+function withNoStore(res) {
+  const headers = new Headers(res.headers);
+  headers.set("cache-control", "no-store, must-revalidate");
+  headers.set("pragma", "no-cache");
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+}
+
 function homeHtml() {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Twitch Loyalty</title></head>
@@ -231,6 +257,7 @@ function homeHtml() {
   <ul>
     <li><a href="/panel/">Extension panel</a></li>
     <li><a href="/overlay/">OBS overlay</a></li>
+    <li><a href="/privacy/">Privacy policy</a></li>
     <li><a href="/api/health">API health</a></li>
     <li><a href="/api/overlay">Overlay JSON</a></li>
   </ul>

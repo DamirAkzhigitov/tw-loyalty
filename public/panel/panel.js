@@ -1,8 +1,19 @@
 const params = new URLSearchParams(location.search);
+const WORKER_API = "https://twitch-loyalty.damir-cy.workers.dev/api";
+
+function defaultApiBase() {
+  const host = location.hostname;
+  // Hosted Test / Released: files come from Twitch CDN, API stays on the Worker.
+  if (host.endsWith("ext-twitch.tv") || host.endsWith(".twitch.tv")) {
+    return WORKER_API;
+  }
+  return `${location.origin}/api`;
+}
+
 const API_BASE =
   params.get("api") ||
   localStorage.getItem("loyaltyApiBase") ||
-  `${location.origin}/api`;
+  defaultApiBase();
 
 const DEV_USER =
   params.get("user") || localStorage.getItem("loyaltyDevUser") || "dev-viewer-1";
@@ -37,6 +48,7 @@ const els = {
   redeemText: document.querySelector("#redeem-text"),
   redeemCancel: document.querySelector("#redeem-cancel"),
   redeemConfirm: document.querySelector("#redeem-confirm"),
+  shareIdentity: document.querySelector("#share-identity"),
 };
 
 function setStatus(text, kind = "") {
@@ -141,11 +153,57 @@ async function submitRedeem(text) {
 }
 
 function sessionBody() {
+  const twitchUserId = window.Twitch?.ext?.viewer?.id || undefined;
   return JSON.stringify({
     displayName: twitchDisplayName || undefined,
     helixToken: helixToken || undefined,
     clientId: twitchClientId || undefined,
+    twitchUserId,
   });
+}
+
+function twitchViewerLinked() {
+  return Boolean(window.Twitch?.ext?.viewer?.isLinked);
+}
+
+function updateShareButton() {
+  if (!els.shareIdentity) return;
+  const show = authMode === "twitch" && !twitchViewerLinked();
+  els.shareIdentity.classList.toggle("hidden", !show);
+}
+
+async function resolveTwitchName() {
+  const viewer = window.Twitch?.ext?.viewer;
+  if (!viewer?.isLinked || !viewer.id || !helixToken || !twitchClientId) {
+    updateShareButton();
+    return;
+  }
+  updateShareButton();
+  if (twitchDisplayName) return;
+  const url = `https://api.twitch.tv/helix/users?id=${encodeURIComponent(viewer.id)}`;
+  for (const scheme of ["Extension", "Bearer"]) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "Client-Id": twitchClientId,
+          Authorization: `${scheme} ${helixToken}`,
+        },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const name = data.data?.[0]?.display_name;
+      if (typeof name === "string" && name.trim()) {
+        twitchDisplayName = name.trim();
+        return;
+      }
+    } catch {
+      // try the other scheme
+    }
+  }
+}
+
+function requestIdentityShare() {
+  window.Twitch?.ext?.actions?.requestIdShare?.();
 }
 
 async function startSession() {
@@ -161,6 +219,7 @@ async function startSession() {
     "ok",
   );
   startHeartbeat();
+  updateShareButton();
 }
 
 async function beat() {
@@ -193,6 +252,7 @@ function escapeHtml(value) {
 }
 
 els.redeemCancel.addEventListener("click", closeRedeem);
+els.shareIdentity?.addEventListener("click", requestIdentityShare);
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
   void submitRedeem(els.redeemText.value.trim());
@@ -217,7 +277,16 @@ function bootTwitch() {
     authToken = auth.token;
     helixToken = auth.helixToken || null;
     twitchClientId = auth.clientId || null;
-    begin("twitch");
+    void resolveTwitchName().then(() => {
+      if (!sessionStarted) begin("twitch");
+      else if (twitchDisplayName) void beat();
+    });
+  });
+
+  window.Twitch.ext.viewer?.onChanged?.(() => {
+    void resolveTwitchName().then(() => {
+      if (sessionStarted && twitchDisplayName) void beat();
+    });
   });
 
   // Only the standalone /panel page needs a DevViewer fallback.

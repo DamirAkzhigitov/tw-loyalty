@@ -9,12 +9,24 @@ let channelId = params.get("channel") || "";
 /** @type {WebSocket | null} */
 let socket = null;
 
+const scale = Number(params.get("scale") || "1");
+if (Number.isFinite(scale) && scale > 0 && scale !== 1) {
+  document.documentElement.style.zoom = String(scale);
+}
+
 const els = {
   watching: document.querySelector("#watching"),
   leaderboard: document.querySelector("#leaderboard"),
   feed: document.querySelector("#feed"),
   room: document.querySelector("#room"),
+  cardWatching: document.querySelector("#card-watching"),
+  cardBoard: document.querySelector("#card-board"),
+  cardFeed: document.querySelector("#card-feed"),
 };
+
+if (params.get("debug") === "1" && els.room) {
+  els.room.classList.add("debug");
+}
 
 function render(state) {
   if (state.channelId && state.channelId !== channelId) {
@@ -26,25 +38,42 @@ function render(state) {
       ? `Room ${channelId}`
       : "Waiting for Extension viewers…";
   }
-  renderPeople(els.watching, state.watching || [], "Nobody watching yet");
-  renderPeople(els.leaderboard, state.leaderboard || [], "No points yet", true);
+  renderPeople(
+    els.watching,
+    els.cardWatching,
+    state.watching || [],
+    true,
+    5,
+  );
+  renderPeople(
+    els.leaderboard,
+    els.cardBoard,
+    state.leaderboard || [],
+    true,
+    5,
+  );
   renderFeed(state.recent || []);
 }
 
-function renderPeople(root, people, emptyText, showPoints = true) {
+function renderPeople(root, card, people, showPoints, limit) {
   root.innerHTML = "";
   if (!people.length) {
-    const li = document.createElement("li");
-    li.className = "empty";
-    li.textContent = emptyText;
-    root.appendChild(li);
+    card.classList.add("hidden");
     return;
   }
-  for (const person of people.slice(0, 8)) {
+  card.classList.remove("hidden");
+  for (const person of people.slice(0, limit)) {
     const li = document.createElement("li");
-    li.innerHTML = showPoints
-      ? `${escapeHtml(person.displayName)} <span class="points">${person.points}</span>`
-      : escapeHtml(person.displayName);
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = person.displayName;
+    li.appendChild(name);
+    if (showPoints) {
+      const pts = document.createElement("span");
+      pts.className = "points";
+      pts.textContent = String(person.points);
+      li.appendChild(pts);
+    }
     root.appendChild(li);
   }
 }
@@ -52,24 +81,15 @@ function renderPeople(root, people, emptyText, showPoints = true) {
 function renderFeed(events) {
   els.feed.innerHTML = "";
   if (!events.length) {
-    const li = document.createElement("li");
-    li.className = "empty";
-    li.textContent = "Waiting for activity…";
-    els.feed.appendChild(li);
+    els.cardFeed.classList.add("hidden");
     return;
   }
-  for (const event of events.slice(0, 6)) {
+  els.cardFeed.classList.remove("hidden");
+  for (const event of events.slice(0, 4)) {
     const li = document.createElement("li");
     li.textContent = event.message;
     els.feed.appendChild(li);
   }
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
 }
 
 function wsUrl() {
@@ -115,3 +135,35 @@ async function pollOnce() {
 void pollOnce();
 connectWs();
 setInterval(() => void pollOnce(), 4000);
+
+function isLocalHost() {
+  return location.hostname === "127.0.0.1" || location.hostname === "localhost";
+}
+
+/** OBS caches CSS hard. On localhost, reload when overlay files change. */
+async function startLiveReload() {
+  if (!isLocalHost() || params.get("live") === "0") return;
+  const files = ["./index.html", "./overlay.css", "./overlay.js"];
+  const peek = async () => {
+    const parts = await Promise.all(
+      files.map((file) =>
+        fetch(`${file}?lr=${Date.now()}`, { cache: "no-store" }).then((res) =>
+          res.ok ? res.text() : "",
+        ),
+      ),
+    );
+    return parts.join("\n--\n");
+  };
+  let stamp = await peek();
+  setInterval(() => {
+    void peek()
+      .then((next) => {
+        if (next && next !== stamp) location.reload();
+      })
+      .catch(() => {
+        // wrangler restarting
+      });
+  }, 800);
+}
+
+void startLiveReload();

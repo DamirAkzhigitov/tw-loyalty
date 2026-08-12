@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy · Twitch Loyalty</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1a2744;
+        background: #fff6e8;
+      }
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 0 0 8px;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 28px 0 8px;
+      }
+      p,
+      li {
+        color: #3d5270;
+      }
+      .meta {
+        color: #4a5d7a;
+        font-size: 0.95rem;
+      }
+      hr {
+        border: 0;
+        border-top: 2px solid #1a2744;
+        margin: 40px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Политика конфиденциальности</h1>
+      <p class="meta">Twitch Loyalty · обновлено 12 августа 2026</p>
+
+      <p>
+        Это расширение лояльности для одного Twitch-канала. Оно считает очки
+        зрителей, пока открыта панель, и показывает имена на оверлее стрима.
+      </p>
+
+      <h2>Какие данные мы получаем</h2>
+      <ul>
+        <li>
+          Идентификатор зрителя из Twitch Extension JWT (часто это скрытый
+          opaque id, а не логин).
+        </li>
+        <li>
+          Отображаемое имя Twitch — только если зритель разрешил «подтверждение
+          личности» (Identity Link).
+        </li>
+        <li>
+          Баланс очков, факт что панель открыта, и текст наград (shoutout, TTS,
+          запрос песни).
+        </li>
+      </ul>
+
+      <h2>Зачем</h2>
+      <p>
+        Чтобы начислять очки, показывать кто смотрит, таблицу лидеров и ленту
+        трат на стриме. Мы не продаём данные и не используем их для рекламы.
+      </p>
+
+      <h2>Где хранится</h2>
+      <p>
+        На Cloudflare (Worker + Durable Object) у оператора этого канала. Данные
+        привязаны к каналу, не к общему магазину расширений.
+      </p>
+
+      <h2>Контакт</h2>
+      <p>
+        Вопросы — стримеру канала, где установлено это расширение. Это не
+        продукт Twitch и не Bits / Channel Points.
+      </p>
+
+      <hr />
+
+      <h1 lang="en">Privacy Policy</h1>
+      <p class="meta" lang="en">Twitch Loyalty · updated 12 August 2026</p>
+
+      <p lang="en">
+        This is a loyalty Extension for a single Twitch channel. It awards
+        points while the panel is open and shows viewer names on the stream
+        overlay.
+      </p>
+
+      <h2 lang="en">What we collect</h2>
+      <ul lang="en">
+        <li>
+          Viewer id from the Twitch Extension JWT (often an opaque id, not a
+          login).
+        </li>
+        <li>
+          Twitch display name, only if the viewer grants Identity Link.
+        </li>
+        <li>
+          Point balance, panel-open presence, and reward text (shoutout, TTS,
+          song request).
+        </li>
+      </ul>
+
+      <h2 lang="en">Why</h2>
+      <p lang="en">
+        To run the loyalty loop: earn, spend, and show watching / leaderboard /
+        spend feed on stream. We do not sell this data or use it for ads.
+      </p>
+
+      <h2 lang="en">Where it is stored</h2>
+      <p lang="en">
+        On Cloudflare (Worker + Durable Object) operated by this channel. Data
+        stays per channel; this is not a public Extension marketplace product.
+      </p>
+
+      <h2 lang="en">Contact</h2>
+      <p lang="en">
+        Ask the streamer of the channel where this Extension is installed. This
+        is not a Twitch product and is not Bits or Channel Points.
+      </p>
+    </main>
+  </body>
+</html>

@@ -33,12 +33,32 @@ npx wrangler login    # once — uses your Cloudflare account
 npm run dev
 ```
 
-Then open the URLs wrangler prints (usually `http://127.0.0.1:8787`):
+Then open the URLs wrangler prints (`http://127.0.0.1:8787`):
 
 - Panel: `/panel/`
 - Second viewer: `/panel/?user=dev-2&name=Alice`
 - Overlay (OBS Browser Source): `/overlay/`
 - Health: `/api/health`
+
+## Local overlay in OBS (no deploy)
+
+Keep `npm run dev` running. Point the OBS **Browser Source** at the local Worker — not the `workers.dev` URL:
+
+```text
+http://127.0.0.1:8787/overlay/
+```
+
+Use `127.0.0.1`, not `localhost` (OBS on Windows often mishandles IPv6). Leave wrangler running while you edit `public/overlay/`. The overlay reloads itself when those files change.
+
+Generate test names/points from a browser: `http://127.0.0.1:8787/panel/` (DevViewer in room `local`).
+
+Local Durable Object state is **not** production. To preview overlay CSS against live Twitch viewers:
+
+```text
+http://127.0.0.1:8787/overlay/?api=https://twitch-loyalty.damir-cy.workers.dev/api&ws=wss://twitch-loyalty.damir-cy.workers.dev/ws
+```
+
+`?live=0` turns off auto-reload. `?scale=1.25` enlarges the overlay.
 
 ## Deploy
 
@@ -61,6 +81,19 @@ In `wrangler.toml`, set `DEV_MODE = "0"` for production.
 2. Host the panel from your Worker URL, e.g. `https://twitch-loyalty.<you>.workers.dev/panel/`
 3. Panel sends the Extension JWT; Worker verifies with `EXT_SECRET`
 4. Channel id from the JWT selects the Durable Object room
+5. Identity Link needs a public Privacy Policy URL in Version Details:
+   `https://twitch-loyalty.damir-cy.workers.dev/privacy/`
+
+### Hosted Test
+
+Twitch CDN serves the panel (`*.ext-twitch.tv`). The Worker is only the API.
+
+1. **Capabilities → Allowlist for URL Fetching Domains** add:
+   `https://twitch-loyalty.damir-cy.workers.dev`
+2. Zip frontend files (`npm run pack:extension` → `twitch-extension.zip`) and upload. Panel path: `panel/index.html`
+3. Re-upload after any `public/panel/` change — Hosted Test does not use the Worker’s `/panel/` HTML.
+
+Without the allowlist, the browser blocks `fetch` to the Worker. If the panel still calls `/api` on `ext-twitch.tv`, Twitch returns **403**.
 
 ## Spend catalog (MVP)
 

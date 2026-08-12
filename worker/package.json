@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --live-reload --ip 127.0.0.1 --port 8787",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
   },

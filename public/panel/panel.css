@@ -1,15 +1,16 @@
 :root {
-  color-scheme: dark;
-  --bg: #0e0e10;
-  --card: #18181b;
-  --text: #efeff1;
-  --muted: #adadb8;
-  --accent: #9147ff;
-  --accent-2: #bf94ff;
-  --line: #2a2a2d;
-  --ok: #00c8b5;
-  --danger: #eb0400;
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+  --bg: #fff4e6;
+  --card: #fffaf1;
+  --ink: #1a2744;
+  --muted: #4a5d7a;
+  --accent: #ff5d4a;
+  --accent-2: #e8a317;
+  --mint: #12b5a7;
+  --line: #1a2744;
+  --ok: #0b8f84;
+  --danger: #d61f3a;
+  font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
 }
 
 * {
@@ -19,13 +20,13 @@
 body {
   margin: 0;
   background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
 }
 
 .panel {
-  padding: 14px;
+  padding: 16px;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .header {
@@ -37,50 +38,55 @@ body {
 
 .eyebrow {
   margin: 0;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--mint);
+  font-size: 13px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 h1 {
-  margin: 2px 0 0;
-  font-size: 18px;
-  font-weight: 700;
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 h2 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .points-box {
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
   padding: 8px 12px;
-  min-width: 84px;
+  min-width: 96px;
   text-align: right;
+  box-shadow: 3px 3px 0 var(--accent-2);
 }
 
 .points-label {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .points-box strong {
-  font-size: 22px;
-  color: var(--accent-2);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .status {
   margin: 0;
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--muted);
 }
 
@@ -92,57 +98,77 @@ h2 {
   color: var(--danger);
 }
 
+.share-identity {
+  width: 100%;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  border: 3px solid var(--line);
+  box-shadow: 3px 3px 0 var(--mint);
+}
+
+.share-identity.hidden {
+  display: none;
+}
+
 .rewards {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .reward {
   width: 100%;
   text-align: left;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--text);
-  padding: 10px 12px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  padding: 12px 14px;
   cursor: pointer;
+  box-shadow: 3px 3px 0 var(--mint);
 }
 
 .reward:hover {
-  border-color: var(--accent);
+  background: #fff;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--mint);
 }
 
 .reward:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: 3px 3px 0 var(--line);
 }
 
 .reward-title {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 800;
+  font-size: 16px;
 }
 
 .reward-cost {
-  color: var(--accent-2);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
 .reward-desc {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .redeem-form {
   display: grid;
   gap: 10px;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 3px 3px 0 var(--accent);
 }
 
 .redeem-form.hidden {
@@ -152,17 +178,19 @@ h2 {
 .redeem-form label {
   display: grid;
   gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .redeem-form input {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 8px 10px;
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  padding: 10px 12px;
   font: inherit;
+  font-size: 16px;
 }
 
 .form-actions {
@@ -173,26 +201,30 @@ h2 {
 
 button {
   font: inherit;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 0;
-  padding: 8px 12px;
+  padding: 10px 14px;
   cursor: pointer;
 }
 
 button[type="submit"] {
   background: var(--accent);
   color: white;
-  font-weight: 600;
+  font-weight: 800;
+  border: 3px solid var(--line);
+  box-shadow: 2px 2px 0 var(--line);
 }
 
 button.ghost {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border: 3px solid var(--line);
+  font-weight: 700;
 }
 
 .hint {
   margin: 0;
-  font-size: 11px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--muted);
 }
