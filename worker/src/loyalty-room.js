@@ -1,3 +1,4 @@
+import { json, sanitizeDisplayName, sanitizeId } from "./auth.js";
 import { getReward, REWARDS } from "./rewards.js";
 
 const DEFAULT_CONFIG = {
@@ -5,10 +6,23 @@ const DEFAULT_CONFIG = {
   tickMs: 1000,
   minHeartbeatGapMs: 800,
   presenceTimeoutMs: 5000,
+  maxPointsPerHour: 3600,
+  redeemCooldownMs: 3000,
+};
+
+const CONFIG_BOUNDS = {
+  pointsPerTick: [0, 10],
+  tickMs: [200, 60_000],
+  minHeartbeatGapMs: [200, 60_000],
+  presenceTimeoutMs: [1_000, 120_000],
+  maxPointsPerHour: [1, 10_000],
+  redeemCooldownMs: [0, 60_000],
 };
 
 const MAX_OVERLAY_EVENTS = 30;
 const MAX_REDEEM_LOG = 100;
+const MAX_SOCKETS = 32;
+const HOUR_MS = 3_600_000;
 
 /**
  * One Durable Object = one channel's loyalty room.
@@ -66,6 +80,7 @@ export class LoyaltyRoom {
 
     if (request.method === "POST" && url.pathname === "/session") {
       const identity = await identityFromRequest(request);
+      if (!identity.userId) return json({ error: "unauthorized" }, 401);
       const viewer = this.upsertViewer(identity);
       await this.persist();
       this.broadcast();
@@ -78,6 +93,7 @@ export class LoyaltyRoom {
 
     if (request.method === "POST" && url.pathname === "/heartbeat") {
       const identity = await identityFromRequest(request);
+      if (!identity.userId) return json({ error: "unauthorized" }, 401);
       this.upsertViewer(identity);
       const result = this.heartbeat(identity.userId);
       if (!result.ok) return json(result, 400);
@@ -90,17 +106,20 @@ export class LoyaltyRoom {
 
     if (request.method === "GET" && url.pathname === "/me") {
       const identity = identityFromHeaders(request);
+      if (!identity.userId) return json({ error: "unauthorized" }, 401);
       const viewer = this.upsertViewer(identity);
       return json({ viewer: publicViewer(viewer) });
     }
 
     if (request.method === "POST" && url.pathname === "/redeem") {
       const identity = identityFromHeaders(request);
+      if (!identity.userId) return json({ error: "unauthorized" }, 401);
       const body = await request.json().catch(() => ({}));
       const reward = getReward(String(body.type ?? ""));
       if (!reward) return json({ error: "unknown_reward" }, 400);
 
       let text = typeof body.text === "string" ? body.text.trim() : "";
+      text = text.replace(/[\u0000-\u001F\u007F]/g, "");
       if (reward.needsText && !text) {
         return json({ error: "text_required" }, 400);
       }
@@ -114,7 +133,12 @@ export class LoyaltyRoom {
         payload: { text },
       });
       if (!result.ok) {
-        const status = result.error === "insufficient_points" ? 402 : 400;
+        const status =
+          result.error === "insufficient_points"
+            ? 402
+            : result.error === "cooldown"
+              ? 429
+              : 400;
         return json(result, status);
       }
       await this.persist();
@@ -149,13 +173,9 @@ export class LoyaltyRoom {
 
     if (request.method === "PATCH" && url.pathname === "/admin/config") {
       const body = await request.json().catch(() => ({}));
-      for (const key of [
-        "pointsPerTick",
-        "tickMs",
-        "minHeartbeatGapMs",
-        "presenceTimeoutMs",
-      ]) {
-        if (typeof body[key] === "number") this.state.config[key] = body[key];
+      for (const key of Object.keys(CONFIG_BOUNDS)) {
+        const next = clampConfigNumber(key, body[key]);
+        if (next !== null) this.state.config[key] = next;
       }
       await this.persist();
       this.broadcast();
@@ -166,6 +186,10 @@ export class LoyaltyRoom {
   }
 
   acceptWebSocket() {
+    if (this.ctx.getWebSockets().length >= MAX_SOCKETS) {
+      return json({ error: "too_many_connections" }, 503);
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
@@ -230,20 +254,24 @@ export class LoyaltyRoom {
    */
   upsertViewer(identity) {
     let viewer = this.state.viewers[identity.userId];
+    const displayName = sanitizeDisplayName(identity.displayName);
     if (!viewer) {
       viewer = {
         userId: identity.userId,
         opaqueUserId: identity.opaqueUserId ?? identity.userId,
-        displayName: identity.displayName ?? `User-${identity.userId.slice(-4)}`,
+        displayName: displayName || `User-${identity.userId.slice(-4)}`,
         points: 0,
         lastHeartbeatAt: 0,
+        lastRedeemAt: 0,
         watching: false,
         earnedTotal: 0,
         spentTotal: 0,
+        earnedWindowStart: 0,
+        earnedInWindow: 0,
       };
       this.state.viewers[identity.userId] = viewer;
     } else {
-      if (identity.displayName) viewer.displayName = identity.displayName;
+      if (displayName) viewer.displayName = displayName;
       if (identity.opaqueUserId) viewer.opaqueUserId = identity.opaqueUserId;
     }
     return viewer;
@@ -267,11 +295,28 @@ export class LoyaltyRoom {
       };
     }
 
+    if (!viewer.earnedWindowStart || now - viewer.earnedWindowStart >= HOUR_MS) {
+      viewer.earnedWindowStart = now;
+      viewer.earnedInWindow = 0;
+    }
+    const award = this.state.config.pointsPerTick;
+    if (viewer.earnedInWindow + award > this.state.config.maxPointsPerHour) {
+      viewer.lastHeartbeatAt = now;
+      viewer.watching = true;
+      return {
+        ok: true,
+        skipped: true,
+        reason: "hourly_cap",
+        viewer: publicViewer(viewer),
+      };
+    }
+
     const wasWatching = viewer.watching;
     viewer.lastHeartbeatAt = now;
     viewer.watching = true;
-    viewer.points += this.state.config.pointsPerTick;
-    viewer.earnedTotal += this.state.config.pointsPerTick;
+    viewer.points += award;
+    viewer.earnedTotal += award;
+    viewer.earnedInWindow += award;
 
     if (!wasWatching) {
       this.pushOverlay({
@@ -284,7 +329,7 @@ export class LoyaltyRoom {
     return {
       ok: true,
       skipped: false,
-      awarded: this.state.config.pointsPerTick,
+      awarded: award,
       viewer: publicViewer(viewer),
     };
   }
@@ -296,6 +341,18 @@ export class LoyaltyRoom {
     const viewer = this.state.viewers[input.userId];
     if (!viewer) return { ok: false, error: "unknown_viewer" };
     if (input.cost < 0) return { ok: false, error: "invalid_cost" };
+    const now = Date.now();
+    if (
+      this.state.config.redeemCooldownMs > 0 &&
+      viewer.lastRedeemAt &&
+      now - viewer.lastRedeemAt < this.state.config.redeemCooldownMs
+    ) {
+      return {
+        ok: false,
+        error: "cooldown",
+        viewer: publicViewer(viewer),
+      };
+    }
     if (viewer.points < input.cost) {
       return {
         ok: false,
@@ -306,6 +363,7 @@ export class LoyaltyRoom {
 
     viewer.points -= input.cost;
     viewer.spentTotal += input.cost;
+    viewer.lastRedeemAt = now;
 
     const event = {
       id: `r${++this.state.redeemSeq}`,
@@ -314,7 +372,7 @@ export class LoyaltyRoom {
       type: input.type,
       payload: input.payload ?? {},
       cost: input.cost,
-      createdAt: Date.now(),
+      createdAt: now,
       status: "queued",
     };
 
@@ -346,11 +404,11 @@ export class LoyaltyRoom {
   overlayState() {
     const watching = Object.values(this.state.viewers)
       .filter((v) => v.watching)
-      .map(publicViewer)
+      .map(overlayViewer)
       .sort((a, b) => b.points - a.points);
 
     const leaderboard = Object.values(this.state.viewers)
-      .map(publicViewer)
+      .map(overlayViewer)
       .sort((a, b) => b.points - a.points)
       .slice(0, 10);
 
@@ -359,7 +417,10 @@ export class LoyaltyRoom {
       watching,
       leaderboard,
       recent: this.state.overlayEvents.slice(0, 10),
-      queue: this.state.redeemLog.filter((e) => e.status === "queued").slice(0, 20),
+      queue: this.state.redeemLog
+        .filter((e) => e.status === "queued")
+        .slice(0, 20)
+        .map(publicRedeem),
     };
   }
 
@@ -396,14 +457,27 @@ function serializeState(state) {
 }
 
 function reviveState(saved) {
+  const config = { ...DEFAULT_CONFIG, ...(saved.config || {}) };
+  for (const key of Object.keys(CONFIG_BOUNDS)) {
+    const next = clampConfigNumber(key, config[key]);
+    config[key] = next === null ? DEFAULT_CONFIG[key] : next;
+  }
   return {
     ...freshState(),
     ...saved,
-    config: { ...DEFAULT_CONFIG, ...(saved.config || {}) },
+    config,
     viewers: saved.viewers || {},
     redeemLog: saved.redeemLog || [],
     overlayEvents: saved.overlayEvents || [],
   };
+}
+
+function clampConfigNumber(key, value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const bounds = CONFIG_BOUNDS[key];
+  if (!bounds) return null;
+  const [min, max] = bounds;
+  return Math.min(max, Math.max(min, value));
 }
 
 function publicViewer(viewer) {
@@ -418,14 +492,36 @@ function publicViewer(viewer) {
   };
 }
 
+function overlayViewer(viewer) {
+  return {
+    displayName: viewer.displayName,
+    points: viewer.points,
+    watching: viewer.watching,
+    earnedTotal: viewer.earnedTotal,
+    spentTotal: viewer.spentTotal,
+  };
+}
+
+function publicRedeem(event) {
+  return {
+    id: event.id,
+    displayName: event.displayName,
+    type: event.type,
+    payload: event.payload,
+    cost: event.cost,
+    createdAt: event.createdAt,
+    status: event.status,
+  };
+}
+
 /**
  * @param {Request} request
  */
 function identityFromHeaders(request) {
   return {
-    userId: request.headers.get("X-Viewer-Id") || "unknown",
-    opaqueUserId: request.headers.get("X-Viewer-Opaque-Id") || undefined,
-    displayName: request.headers.get("X-Viewer-Name") || undefined,
+    userId: sanitizeId(request.headers.get("X-Viewer-Id")),
+    opaqueUserId: sanitizeId(request.headers.get("X-Viewer-Opaque-Id")) || undefined,
+    displayName: sanitizeDisplayName(request.headers.get("X-Viewer-Name")) || undefined,
   };
 }
 
@@ -437,22 +533,7 @@ async function identityFromRequest(request) {
   const identity = identityFromHeaders(request);
   const clone = request.clone();
   const body = await clone.json().catch(() => ({}));
-  if (typeof body.displayName === "string" && body.displayName.trim()) {
-    identity.displayName = body.displayName.trim();
-  }
+  const fromBody = sanitizeDisplayName(body.displayName);
+  if (fromBody) identity.displayName = fromBody;
   return identity;
-}
-
-/**
- * @param {unknown} body
- * @param {number} status
- */
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
-    },
-  });
 }

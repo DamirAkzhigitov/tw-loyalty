@@ -119,8 +119,8 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 
 ## 5. Technical follow-ups
 
-- **`EXT_SECRET`** + `DEV_MODE=0` in production; verify Extension JWTs.
-- Lock **`/api/admin/*`** (shared secret or streamer OAuth).
+- **`EXT_SECRET`** + `DEV_MODE=0` in production; verify Extension JWTs. (JWT alg/exp required; unsigned tokens rejected.)
+- Lock **`/api/admin/*`** — production requires `ADMIN_SECRET` / `X-Admin-Secret`; unset secret disables admin.
 - Durable Object is enough for one channel; **D1/SQLite** if we need history, analytics, or multi-device recovery beyond DO storage.
 - TTS: Worker queues → overlay or a local helper (Streamer.bot / browser TTS) plays audio.
 - Music: store URL + title; never autoplay untrusted audio without a queue.

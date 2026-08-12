@@ -73,7 +73,7 @@ Do not merge all traffic into `local` unless you are explicitly simplifying to a
 - Production: `Authorization: Bearer <Extension JWT>`, verify with `EXT_SECRET` (base64), `DEV_MODE=0`.
 - Local/dev: `X-Dev-User-Id`, `X-Dev-Display-Name`, optional `X-Dev-Channel-Id`.
 - JWT often has `opaque_user_id` and `channel_id`; `user_id` / display name only if identity is shared. Helix via `helixToken` is used to resolve display names when possible.
-- `/api/admin/*` is open in dev — lock it before treating this as production.
+- `/api/admin/*` is open in local DEV_MODE only. Production requires `ADMIN_SECRET` via `X-Admin-Secret`; if that secret is unset, admin is disabled.
 
 ## Conventions
 

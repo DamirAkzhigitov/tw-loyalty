@@ -1,9 +1,18 @@
-import { corsPreflight, json, requireViewer } from "./auth.js";
+import {
+  corsPreflight,
+  json,
+  requireAdmin,
+  requireViewer,
+  sanitizeChannelId,
+  sanitizeDisplayName,
+  withCors,
+} from "./auth.js";
 import { LoyaltyRoom } from "./loyalty-room.js";
 
 export { LoyaltyRoom };
 
 const REGISTRY_ROOM = "__registry";
+const MAX_BODY_BYTES = 4096;
 
 /**
  * @param {Request} request
@@ -14,42 +23,48 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
-      return corsPreflight();
+      return corsPreflight(request);
     }
 
-    if (url.pathname === "/api/health") {
-      return json({
-        ok: true,
-        mode: env.DEV_MODE === "0" ? "prod" : "dev",
-        runtime: "cloudflare-workers",
-      });
-    }
-
-    if (url.pathname === "/" && request.method === "GET") {
-      return new Response(homeHtml(), {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
-
-    if (url.pathname === "/ws") {
-      const channelId = await resolveChannelId(env, url, request);
-      const room = roomStub(env, channelId);
-      return room.fetch(request);
-    }
-
-    if (url.pathname.startsWith("/api/")) {
-      return handleApi(request, env, url);
-    }
-
-    if (env.ASSETS) {
-      const assetRes = await env.ASSETS.fetch(request);
-      if (isOverlayPath(url.pathname)) return withNoStore(assetRes);
-      return assetRes;
-    }
-
-    return json({ error: "not_found" }, 404);
+    const response = await handleRequest(request, env, url);
+    if (url.pathname.startsWith("/api/")) return withCors(request, response);
+    return response;
   },
 };
+
+/**
+ * @param {Request} request
+ * @param {Env} env
+ * @param {URL} url
+ */
+async function handleRequest(request, env, url) {
+  if (url.pathname === "/api/health") {
+    return json({ ok: true, runtime: "cloudflare-workers" });
+  }
+
+  if (url.pathname === "/" && request.method === "GET") {
+    return new Response(homeHtml(), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  if (url.pathname === "/ws") {
+    const channelId = await resolveChannelId(env, url, request);
+    return roomStub(env, channelId).fetch(request);
+  }
+
+  if (url.pathname.startsWith("/api/")) {
+    return handleApi(request, env, url);
+  }
+
+  if (env.ASSETS) {
+    const assetRes = await env.ASSETS.fetch(request);
+    if (isOverlayPath(url.pathname)) return withNoStore(assetRes);
+    return assetRes;
+  }
+
+  return json({ error: "not_found" }, 404);
+}
 
 /**
  * @param {Request} request
@@ -68,6 +83,8 @@ async function handleApi(request, env, url) {
   }
 
   if (path.startsWith("/admin/")) {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
     const channelId = await resolveChannelId(env, url, request);
     return forward(env, channelId, path, request);
   }
@@ -83,54 +100,52 @@ async function handleApi(request, env, url) {
       const result = await requireViewer(request, env);
       if (result.error) return result.error;
       identity = result.identity;
-    } catch (err) {
-      return json(
-        {
-          error: "invalid_token",
-          detail: err instanceof Error ? err.message : String(err),
-        },
-        401,
-      );
+    } catch {
+      return json({ error: "invalid_token" }, 401);
     }
 
-    const bodyText =
-      request.method !== "GET" && request.method !== "HEAD"
-        ? await request.text()
-        : "";
     let body = {};
-    try {
-      body = bodyText ? JSON.parse(bodyText) : {};
-    } catch {
-      body = {};
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      const parsed = await readJsonBody(request);
+      if (parsed.error) return parsed.error;
+      body = parsed.body;
     }
 
     const displayName =
-      (typeof body.displayName === "string" && body.displayName.trim()) ||
       identity.displayName ||
-      request.headers.get("X-Viewer-Name") ||
-      request.headers.get("X-Dev-Display-Name") ||
+      (identity.isDev
+        ? sanitizeDisplayName(request.headers.get("X-Dev-Display-Name"))
+        : "") ||
       (await helixDisplayName(body, identity));
 
-    const channelId =
-      identity.channelId ||
-      url.searchParams.get("channel") ||
-      request.headers.get("X-Dev-Channel-Id") ||
-      env.DEFAULT_CHANNEL ||
-      "local";
+    let channelId;
+    if (!identity.isDev) {
+      channelId = identity.channelId;
+      if (!channelId) return json({ error: "unauthorized" }, 401);
+    } else {
+      channelId =
+        identity.channelId ||
+        sanitizeChannelId(url.searchParams.get("channel")) ||
+        sanitizeChannelId(request.headers.get("X-Dev-Channel-Id")) ||
+        env.DEFAULT_CHANNEL ||
+        "local";
+    }
 
     if (!identity.isDev && identity.channelId) {
       await rememberChannel(env, identity.channelId);
     }
 
     const doPath = path.replace(/^\/viewer/, "") || "/";
-    const headers = new Headers(request.headers);
+    const headers = new Headers();
+    headers.set("content-type", "application/json");
     headers.set("X-Viewer-Id", identity.userId);
     headers.set("X-Viewer-Opaque-Id", identity.opaqueUserId || identity.userId);
     if (displayName) headers.set("X-Viewer-Name", displayName);
 
+    const doBody = viewerDoBody(path, body, displayName);
     const init = { method: request.method, headers };
-    if (bodyText) {
-      init.body = JSON.stringify({ ...body, displayName: displayName || undefined });
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      init.body = JSON.stringify(doBody);
     }
 
     return roomStub(env, channelId).fetch(
@@ -142,6 +157,46 @@ async function handleApi(request, env, url) {
 }
 
 /**
+ * @param {Request} request
+ */
+async function readJsonBody(request) {
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAX_BODY_BYTES) {
+    return { error: json({ error: "payload_too_large" }, 413), body: {} };
+  }
+  const bodyText = await request.text();
+  if (bodyText.length > MAX_BODY_BYTES) {
+    return { error: json({ error: "payload_too_large" }, 413), body: {} };
+  }
+  if (!bodyText) return { error: null, body: {} };
+  try {
+    const body = JSON.parse(bodyText);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return { error: null, body: {} };
+    }
+    return { error: null, body };
+  } catch {
+    return { error: null, body: {} };
+  }
+}
+
+/**
+ * @param {string} path
+ * @param {Record<string, unknown>} body
+ * @param {string} displayName
+ */
+function viewerDoBody(path, body, displayName) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  if (displayName) out.displayName = displayName;
+  if (path === "/viewer/redeem") {
+    if (typeof body.type === "string") out.type = body.type;
+    if (typeof body.text === "string") out.text = body.text;
+  }
+  return out;
+}
+
+/**
  * Overlay without ?channel= follows the last Twitch Extension room,
  * not the browser DevViewer room.
  * @param {Env} env
@@ -149,15 +204,18 @@ async function handleApi(request, env, url) {
  * @param {Request} request
  */
 async function resolveChannelId(env, url, request) {
-  const explicit =
-    url.searchParams.get("channel") || request.headers.get("X-Dev-Channel-Id");
+  const explicit = sanitizeChannelId(
+    url.searchParams.get("channel") || request.headers.get("X-Dev-Channel-Id"),
+  );
   if (explicit) return explicit;
 
   const res = await registryStub(env).fetch(
     new Request("https://loyalty.internal/last"),
   );
   const data = await res.json().catch(() => ({}));
-  return data.channelId || env.DEFAULT_CHANNEL || "local";
+  return (
+    sanitizeChannelId(data.channelId) || env.DEFAULT_CHANNEL || "local"
+  );
 }
 
 /**
@@ -182,17 +240,15 @@ function registryStub(env) {
 }
 
 /**
+ * Helix lookup uses the JWT user_id only — never a client-supplied twitchUserId.
  * @param {Record<string, unknown>} body
- * @param {{ userId: string, twitchUserId?: string }} identity
+ * @param {{ twitchUserId?: string }} identity
  */
 async function helixDisplayName(body, identity) {
   const token = typeof body.helixToken === "string" ? body.helixToken : "";
   const clientId = typeof body.clientId === "string" ? body.clientId : "";
-  const twitchUserId =
-    (typeof body.twitchUserId === "string" && body.twitchUserId.trim()) ||
-    identity.twitchUserId ||
-    "";
-  if (!token || !clientId || !twitchUserId) return null;
+  const twitchUserId = identity.twitchUserId || "";
+  if (!token || !clientId || !twitchUserId) return "";
   const url = `https://api.twitch.tv/helix/users?id=${encodeURIComponent(twitchUserId)}`;
   for (const scheme of ["Extension", "Bearer"]) {
     try {
@@ -204,13 +260,13 @@ async function helixDisplayName(body, identity) {
       });
       if (!res.ok) continue;
       const data = await res.json();
-      const name = data.data?.[0]?.display_name;
-      if (typeof name === "string" && name.trim()) return name.trim();
+      const name = sanitizeDisplayName(data.data?.[0]?.display_name);
+      if (name) return name;
     } catch {
       // try the other auth scheme
     }
   }
-  return null;
+  return "";
 }
 
 /**
@@ -259,7 +315,6 @@ function homeHtml() {
     <li><a href="/overlay/">OBS overlay</a></li>
     <li><a href="/privacy/">Privacy policy</a></li>
     <li><a href="/api/health">API health</a></li>
-    <li><a href="/api/overlay">Overlay JSON</a></li>
   </ul>
 </body></html>`;
 }
