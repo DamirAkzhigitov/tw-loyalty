@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loyalty Panel</title>
+    <link rel="stylesheet" href="./panel.css" />
+    <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  </head>
+  <body>
+    <main class="panel">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Loyalty</p>
+          <h1 id="display-name">Guest</h1>
+        </div>
+        <div class="points-box" aria-live="polite">
+          <span class="points-label">Points</span>
+          <strong id="points">0</strong>
+        </div>
+      </header>
+
+      <p id="status" class="status">Connecting…</p>
+
+      <section>
+        <h2>Spend</h2>
+        <div id="rewards" class="rewards"></div>
+      </section>
+
+      <form id="redeem-form" class="redeem-form hidden">
+        <label>
+          <span id="redeem-label">Message</span>
+          <input id="redeem-text" type="text" maxlength="160" autocomplete="off" />
+        </label>
+        <div class="form-actions">
+          <button type="button" id="redeem-cancel" class="ghost">Cancel</button>
+          <button type="submit" id="redeem-confirm">Confirm</button>
+        </div>
+      </form>
+
+      <p class="hint">
+        Points tick while this panel is open on the stream page.
+      </p>
+    </main>
+    <script type="module" src="./panel.js"></script>
+  </body>
+</html>

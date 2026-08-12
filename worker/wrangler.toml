@@ -1,0 +1,26 @@
+name = "twitch-loyalty"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[assets]
+directory = "../public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/ws"]
+
+[vars]
+DEV_MODE = "1"
+# Optional: default channel room when Extension JWT has no channel_id
+DEFAULT_CHANNEL = "local"
+
+# Set as a secret later: wrangler secret put EXT_SECRET
+# EXT_SECRET = ""
+
+[[durable_objects.bindings]]
+name = "LOYALTY"
+class_name = "LoyaltyRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LoyaltyRoom"]

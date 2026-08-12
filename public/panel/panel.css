@@ -1,0 +1,198 @@
+:root {
+  color-scheme: dark;
+  --bg: #0e0e10;
+  --card: #18181b;
+  --text: #efeff1;
+  --muted: #adadb8;
+  --accent: #9147ff;
+  --accent-2: #bf94ff;
+  --line: #2a2a2d;
+  --ok: #00c8b5;
+  --danger: #eb0400;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.panel {
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+h1 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.points-box {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-width: 84px;
+  text-align: right;
+}
+
+.points-label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.points-box strong {
+  font-size: 22px;
+  color: var(--accent-2);
+}
+
+.status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status.ok {
+  color: var(--ok);
+}
+
+.status.err {
+  color: var(--danger);
+}
+
+.rewards {
+  display: grid;
+  gap: 8px;
+}
+
+.reward {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.reward:hover {
+  border-color: var(--accent);
+}
+
+.reward:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.reward-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.reward-cost {
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.reward-desc {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.redeem-form {
+  display: grid;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.redeem-form.hidden {
+  display: none;
+}
+
+.redeem-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.redeem-form input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: end;
+}
+
+button {
+  font: inherit;
+  border-radius: 8px;
+  border: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button[type="submit"] {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}

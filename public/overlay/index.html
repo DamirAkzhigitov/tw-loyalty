@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loyalty Overlay</title>
+    <link rel="stylesheet" href="./overlay.css" />
+  </head>
+  <body>
+    <div class="overlay">
+      <p id="room" class="room">Connecting…</p>
+      <section class="card">
+        <p class="label">Watching now</p>
+        <ul id="watching" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <p class="label">Top points</p>
+        <ol id="leaderboard" class="list numbered"></ol>
+      </section>
+
+      <section class="card wide">
+        <p class="label">Live</p>
+        <ul id="feed" class="feed"></ul>
+      </section>
+    </div>
+    <script type="module" src="./overlay.js"></script>
+  </body>
+</html>

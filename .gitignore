@@ -1,0 +1,11 @@
+node_modules/
+backend/node_modules/
+worker/node_modules/
+.DS_Store
+.env
+.dev.vars
+*.log
+.idea/
+.vscode/
+.wrangler/
+*.zip

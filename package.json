@@ -1,0 +1,14 @@
+{
+  "name": "twitch-loyalty",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Custom loyalty points via Twitch Extension panel + Cloudflare Worker",
+  "scripts": {
+    "dev": "npm --prefix worker run dev",
+    "deploy": "npm --prefix worker run deploy",
+    "install:all": "npm --prefix worker install"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
