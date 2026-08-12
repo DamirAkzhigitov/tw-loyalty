@@ -125,7 +125,7 @@ export function json(body, status = 200) {
       "content-type": "application/json; charset=utf-8",
       "access-control-allow-origin": "*",
       "access-control-allow-headers":
-        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name",
+        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name, X-Admin-Secret",
       "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     },
   });
@@ -137,7 +137,7 @@ export function corsPreflight() {
     headers: {
       "access-control-allow-origin": "*",
       "access-control-allow-headers":
-        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name",
+        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name, X-Admin-Secret",
       "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     },
   });

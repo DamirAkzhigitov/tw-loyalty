@@ -20,10 +20,17 @@
         </div>
       </header>
 
+      <p id="earn-rate" class="earn-rate">Earning while this panel is open.</p>
       <p id="status" class="status">Connecting…</p>
       <button type="button" id="share-identity" class="share-identity hidden">
         Show my Twitch name
       </button>
+
+      <section id="poll-section" class="poll-section hidden">
+        <h2 id="poll-title">Poll</h2>
+        <div id="poll-options" class="poll-options"></div>
+        <p id="poll-hint" class="poll-hint"></p>
+      </section>
 
       <section>
         <h2>Spend</h2>
@@ -40,8 +47,6 @@
           <button type="submit" id="redeem-confirm">Confirm</button>
         </div>
       </form>
-
-      <p class="hint">+1 point / sec while this panel is open.</p>
     </main>
     <script type="module" src="./panel.js"></script>
   </body>

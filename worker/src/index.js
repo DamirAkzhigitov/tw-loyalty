@@ -76,7 +76,8 @@ async function handleApi(request, env, url) {
     path === "/viewer/session" ||
     path === "/viewer/heartbeat" ||
     path === "/viewer/me" ||
-    path === "/viewer/redeem"
+    path === "/viewer/redeem" ||
+    path === "/viewer/vote"
   ) {
     let identity;
     try {
@@ -257,6 +258,7 @@ function homeHtml() {
   <ul>
     <li><a href="/panel/">Extension panel</a></li>
     <li><a href="/overlay/">OBS overlay</a></li>
+    <li><a href="/admin/">Streamer admin (queue / poll)</a></li>
     <li><a href="/privacy/">Privacy policy</a></li>
     <li><a href="/api/health">API health</a></li>
     <li><a href="/api/overlay">Overlay JSON</a></li>

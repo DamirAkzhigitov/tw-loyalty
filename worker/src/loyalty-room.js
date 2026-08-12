@@ -1,10 +1,23 @@
-import { getReward, REWARDS } from "./rewards.js";
+import {
+  DEFAULT_WHEEL_SEGMENTS,
+  getReward,
+  pickWeightedSegment,
+  REWARDS,
+} from "./rewards.js";
 
 const DEFAULT_CONFIG = {
   pointsPerTick: 1,
   tickMs: 1000,
   minHeartbeatGapMs: 800,
   presenceTimeoutMs: 5000,
+  alertMs: {
+    shoutout: 7000,
+    tts: 12000,
+    highlight: 5000,
+  },
+  wheelCooldownMs: 60_000,
+  autoPlayShoutouts: true,
+  autoPlayWheel: true,
 };
 
 const MAX_OVERLAY_EVENTS = 30;
@@ -57,41 +70,65 @@ export class LoyaltyRoom {
 
     if (request.method === "GET" && url.pathname === "/overlay") {
       this.refreshPresence();
+      this.clearExpiredAlert();
       return json(this.overlayState());
     }
 
     if (request.method === "GET" && url.pathname === "/rewards") {
-      return json({ rewards: REWARDS, config: this.state.config });
+      return json({
+        rewards: REWARDS,
+        config: this.state.config,
+        wheelSegments: this.state.wheel.segments,
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/session") {
       const identity = await identityFromRequest(request);
       const viewer = this.upsertViewer(identity);
+      this.clearExpiredAlert();
       await this.persist();
       this.broadcast();
       return json({
         viewer: publicViewer(viewer),
         rewards: REWARDS,
         config: this.state.config,
+        activePoll: publicPoll(this.state.activePoll),
+        wheelCooldownMs: remainingCooldown(
+          this.state.wheel.lastSpinAt,
+          this.state.config.wheelCooldownMs,
+        ),
       });
     }
 
     if (request.method === "POST" && url.pathname === "/heartbeat") {
       const identity = await identityFromRequest(request);
       this.upsertViewer(identity);
+      this.clearExpiredAlert();
       const result = this.heartbeat(identity.userId);
       if (!result.ok) return json(result, 400);
       if (!result.skipped) {
         await this.persist();
         this.broadcast();
       }
-      return json(result);
+      return json({
+        ...result,
+        activePoll: publicPoll(this.state.activePoll),
+        wheelCooldownMs: remainingCooldown(
+          this.state.wheel.lastSpinAt,
+          this.state.config.wheelCooldownMs,
+        ),
+        lastRedeem: lastRedeemForUser(this.state.redeemLog, identity.userId),
+      });
     }
 
     if (request.method === "GET" && url.pathname === "/me") {
       const identity = identityFromHeaders(request);
       const viewer = this.upsertViewer(identity);
-      return json({ viewer: publicViewer(viewer) });
+      return json({
+        viewer: publicViewer(viewer),
+        lastRedeem: lastRedeemForUser(this.state.redeemLog, identity.userId),
+        activePoll: publicPoll(this.state.activePoll),
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/redeem") {
@@ -107,6 +144,20 @@ export class LoyaltyRoom {
       if (text && reward.maxLength) text = text.slice(0, reward.maxLength);
 
       this.upsertViewer(identity);
+
+      if (reward.id === "wheel") {
+        const left = remainingCooldown(
+          this.state.wheel.lastSpinAt,
+          this.state.config.wheelCooldownMs,
+        );
+        if (left > 0) {
+          return json(
+            { error: "cooldown", cooldownMs: left, viewer: publicViewer(this.state.viewers[identity.userId]) },
+            429,
+          );
+        }
+      }
+
       const result = this.redeem({
         userId: identity.userId,
         type: reward.id,
@@ -117,31 +168,116 @@ export class LoyaltyRoom {
         const status = result.error === "insufficient_points" ? 402 : 400;
         return json(result, status);
       }
+
+      // Auto-play shoutouts / wheel when nothing else is playing.
+      if (
+        !this.nowPlaying() &&
+        ((reward.id === "shoutout" && this.state.config.autoPlayShoutouts) ||
+          (reward.id === "wheel" && this.state.config.autoPlayWheel))
+      ) {
+        this.playRedeem(result.event.id);
+      }
+
+      await this.persist();
+      this.broadcast();
+      return json({
+        ...result,
+        activePoll: publicPoll(this.state.activePoll),
+        wheelCooldownMs: remainingCooldown(
+          this.state.wheel.lastSpinAt,
+          this.state.config.wheelCooldownMs,
+        ),
+      });
+    }
+
+    if (request.method === "POST" && url.pathname === "/vote") {
+      const identity = identityFromHeaders(request);
+      const body = await request.json().catch(() => ({}));
+      this.upsertViewer(identity);
+      const result = this.castVote(identity.userId, String(body.optionId || ""));
+      if (!result.ok) {
+        const status =
+          result.error === "poll_closed" || result.error === "no_poll"
+            ? 404
+            : 400;
+        return json(result, status);
+      }
       await this.persist();
       this.broadcast();
       return json(result);
     }
 
     if (request.method === "GET" && url.pathname === "/admin/redeems") {
-      return json({ redeems: this.state.redeemLog });
+      return json({
+        redeems: this.state.redeemLog,
+        nowPlaying: this.nowPlaying(),
+        activeAlert: this.state.activeAlert,
+        activePoll: this.state.activePoll,
+        wheel: this.state.wheel,
+      });
     }
 
     if (request.method === "POST" && url.pathname.startsWith("/admin/redeems/")) {
-      const id = url.pathname.split("/").pop();
+      const parts = url.pathname.split("/").filter(Boolean);
+      // /admin/redeems/:id or /admin/redeems/:id/play|complete|reject|skip
+      const id = parts[2];
+      const action = parts[3] || "";
       const body = await request.json().catch(() => ({}));
-      if (body.status !== "done" && body.status !== "rejected") {
+
+      let status = typeof body.status === "string" ? body.status : "";
+      if (action === "play") status = "playing";
+      else if (action === "complete" || action === "done") status = "done";
+      else if (action === "reject") status = "rejected";
+      else if (action === "skip") status = "rejected";
+
+      if (!["playing", "done", "rejected"].includes(status)) {
         return json({ error: "invalid_status" }, 400);
       }
-      const event = this.state.redeemLog.find((e) => e.id === id);
-      if (!event) return json({ error: "not_found" }, 404);
-      event.status = body.status;
+
+      const result =
+        status === "playing"
+          ? this.playRedeem(id)
+          : this.finishRedeem(id, status);
+
+      if (!result.ok) {
+        const code =
+          result.error === "not_found"
+            ? 404
+            : result.error === "already_playing"
+              ? 409
+              : 400;
+        return json(result, code);
+      }
       await this.persist();
       this.broadcast();
-      return json({ ok: true, event });
+      return json(result);
+    }
+
+    if (request.method === "POST" && url.pathname === "/admin/polls") {
+      const body = await request.json().catch(() => ({}));
+      const result = this.startPoll(body);
+      if (!result.ok) return json(result, 400);
+      await this.persist();
+      this.broadcast();
+      return json(result);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname.startsWith("/admin/polls/") &&
+      url.pathname.endsWith("/close")
+    ) {
+      const id = url.pathname.split("/")[3];
+      const result = this.closePoll(id);
+      if (!result.ok) return json(result, result.error === "not_found" ? 404 : 400);
+      await this.persist();
+      this.broadcast();
+      return json(result);
     }
 
     if (request.method === "POST" && url.pathname === "/admin/reset") {
       this.state = freshState();
+      await this.ctx.storage.deleteAlarm();
       await this.persist();
       this.broadcast();
       return json({ ok: true });
@@ -154,15 +290,64 @@ export class LoyaltyRoom {
         "tickMs",
         "minHeartbeatGapMs",
         "presenceTimeoutMs",
+        "wheelCooldownMs",
       ]) {
         if (typeof body[key] === "number") this.state.config[key] = body[key];
       }
+      for (const key of ["autoPlayShoutouts", "autoPlayWheel"]) {
+        if (typeof body[key] === "boolean") this.state.config[key] = body[key];
+      }
+      if (body.alertMs && typeof body.alertMs === "object") {
+        this.state.config.alertMs = {
+          ...this.state.config.alertMs,
+          ...body.alertMs,
+        };
+      }
+      if (Array.isArray(body.wheelSegments) && body.wheelSegments.length >= 2) {
+        this.state.wheel.segments = body.wheelSegments.map((s, i) => ({
+          id: String(s.id || `seg${i}`),
+          label: String(s.label || `Option ${i + 1}`),
+          weight: Number(s.weight) || 1,
+          color: typeof s.color === "string" ? s.color : undefined,
+        }));
+      }
       await this.persist();
       this.broadcast();
-      return json({ config: this.state.config });
+      return json({ config: this.state.config, wheel: this.state.wheel });
     }
 
     return json({ error: "not_found" }, 404);
+  }
+
+  async alarm() {
+    await this.ensureState();
+    const alert = this.state.activeAlert;
+    if (alert?.endsAt && Date.now() >= alert.endsAt) {
+      if (alert.redeemId) {
+        const event = this.state.redeemLog.find((e) => e.id === alert.redeemId);
+        if (event && event.status === "playing") {
+          this.finishRedeem(event.id, "done");
+        } else {
+          this.state.activeAlert = null;
+          if (this.state.wheel.pendingResult?.redeemId === alert.redeemId) {
+            this.state.wheel.pendingResult = null;
+          }
+        }
+      } else {
+        this.state.activeAlert = null;
+      }
+      await this.persist();
+      this.broadcast();
+    }
+
+    const poll = this.state.activePoll;
+    if (poll?.status === "open" && poll.endsAt && Date.now() >= poll.endsAt) {
+      this.closePoll(poll.id);
+      await this.persist();
+      this.broadcast();
+    }
+
+    await this.scheduleNextAlarm();
   }
 
   acceptWebSocket() {
@@ -173,6 +358,7 @@ export class LoyaltyRoom {
     this.ctx.waitUntil(
       this.ensureState().then(() => {
         this.refreshPresence();
+        this.clearExpiredAlert();
         try {
           server.send(
             JSON.stringify({ type: "overlay", data: this.overlayState() }),
@@ -193,6 +379,7 @@ export class LoyaltyRoom {
   async webSocketMessage(_ws, _message) {
     await this.ensureState();
     this.refreshPresence();
+    this.clearExpiredAlert();
     _ws.send(JSON.stringify({ type: "overlay", data: this.overlayState() }));
   }
 
@@ -208,10 +395,29 @@ export class LoyaltyRoom {
 
   async persist() {
     await this.ctx.storage.put("state", serializeState(this.state));
+    await this.scheduleNextAlarm();
+  }
+
+  async scheduleNextAlarm() {
+    const times = [];
+    if (this.state.activeAlert?.endsAt) times.push(this.state.activeAlert.endsAt);
+    if (
+      this.state.activePoll?.status === "open" &&
+      this.state.activePoll.endsAt
+    ) {
+      times.push(this.state.activePoll.endsAt);
+    }
+    if (!times.length) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    const next = Math.min(...times);
+    await this.ctx.storage.setAlarm(next);
   }
 
   broadcast() {
     this.refreshPresence();
+    this.clearExpiredAlert();
     const payload = JSON.stringify({
       type: "overlay",
       data: this.overlayState(),
@@ -316,6 +522,10 @@ export class LoyaltyRoom {
       cost: input.cost,
       createdAt: Date.now(),
       status: "queued",
+      playedAt: null,
+      completedAt: null,
+      refunded: false,
+      result: null,
     };
 
     this.state.redeemLog.unshift(event);
@@ -330,6 +540,259 @@ export class LoyaltyRoom {
     });
 
     return { ok: true, event, viewer: publicViewer(viewer) };
+  }
+
+  nowPlaying() {
+    return this.state.redeemLog.find((e) => e.status === "playing") || null;
+  }
+
+  /**
+   * @param {string} id
+   */
+  playRedeem(id) {
+    const event = this.state.redeemLog.find((e) => e.id === id);
+    if (!event) return { ok: false, error: "not_found" };
+    if (event.status === "playing") return { ok: true, event };
+    if (event.status !== "queued") {
+      return { ok: false, error: "not_queued", event };
+    }
+
+    const current = this.nowPlaying();
+    if (current && current.id !== id) {
+      return { ok: false, error: "already_playing", event: current };
+    }
+
+    event.status = "playing";
+    event.playedAt = Date.now();
+
+    if (event.type === "wheel") {
+      const picked = pickWeightedSegment(this.state.wheel.segments);
+      const segment = picked?.segment;
+      const index = picked?.index ?? 0;
+      event.result = {
+        segmentId: segment?.id,
+        label: segment?.label,
+        index,
+        color: segment?.color,
+      };
+      this.state.wheel.lastSpinAt = Date.now();
+      this.state.wheel.pendingResult = {
+        redeemId: event.id,
+        segmentId: segment?.id,
+        label: segment?.label,
+        index,
+        color: segment?.color,
+        displayName: event.displayName,
+        spunAt: Date.now(),
+      };
+      const spinMs = 6500;
+      const holdMs = 8000;
+      this.state.activeAlert = {
+        redeemId: event.id,
+        kind: "wheel",
+        displayName: event.displayName,
+        text: segment?.label || "Challenge",
+        title: null,
+        segmentIndex: index,
+        segments: this.state.wheel.segments,
+        startedAt: Date.now(),
+        endsAt: Date.now() + spinMs + holdMs,
+        spinMs,
+      };
+    } else if (event.type === "song") {
+      this.state.activeAlert = {
+        redeemId: event.id,
+        kind: "song",
+        displayName: event.displayName,
+        text: event.payload?.text || "",
+        title: event.payload?.text || "Song request",
+        startedAt: Date.now(),
+        endsAt: null,
+      };
+    } else if (event.type === "tts") {
+      const ms = this.state.config.alertMs.tts || 12000;
+      this.state.activeAlert = {
+        redeemId: event.id,
+        kind: "tts",
+        displayName: event.displayName,
+        text: event.payload?.text || "",
+        title: null,
+        startedAt: Date.now(),
+        endsAt: Date.now() + ms,
+      };
+    } else {
+      // shoutout and anything else
+      const ms = this.state.config.alertMs.shoutout || 7000;
+      this.state.activeAlert = {
+        redeemId: event.id,
+        kind: event.type === "shoutout" ? "shoutout" : event.type,
+        displayName: event.displayName,
+        text: event.payload?.text || "",
+        title: null,
+        startedAt: Date.now(),
+        endsAt: Date.now() + ms,
+      };
+    }
+
+    return { ok: true, event, activeAlert: this.state.activeAlert };
+  }
+
+  /**
+   * @param {string} id
+   * @param {"done" | "rejected"} status
+   */
+  finishRedeem(id, status) {
+    const event = this.state.redeemLog.find((e) => e.id === id);
+    if (!event) return { ok: false, error: "not_found" };
+    if (event.status === "done" || event.status === "rejected") {
+      return { ok: true, event };
+    }
+
+    event.status = status;
+    event.completedAt = Date.now();
+
+    if (status === "rejected" && !event.refunded) {
+      const viewer = this.state.viewers[event.userId];
+      if (viewer) {
+        viewer.points += event.cost;
+        viewer.spentTotal = Math.max(0, viewer.spentTotal - event.cost);
+      }
+      event.refunded = true;
+    }
+
+    if (this.state.activeAlert?.redeemId === id) {
+      this.state.activeAlert = null;
+    }
+    if (this.state.wheel.pendingResult?.redeemId === id) {
+      this.state.wheel.pendingResult = null;
+    }
+
+    return { ok: true, event };
+  }
+
+  /**
+   * @param {Record<string, unknown>} body
+   */
+  startPoll(body) {
+    if (this.state.activePoll?.status === "open") {
+      return { ok: false, error: "poll_open" };
+    }
+
+    const question = String(body.question || "").trim();
+    if (!question) return { ok: false, error: "question_required" };
+
+    let options = Array.isArray(body.options) ? body.options : [];
+    options = options
+      .map((o, i) => ({
+        id: String(o?.id || `opt${i + 1}`),
+        label: String(o?.label || o || "").trim(),
+        votes: 0,
+      }))
+      .filter((o) => o.label);
+
+    if (options.length < 2 || options.length > 4) {
+      return { ok: false, error: "options_2_to_4" };
+    }
+
+    const durationMs = Math.min(
+      Math.max(Number(body.durationMs) || 60_000, 10_000),
+      600_000,
+    );
+
+    const poll = {
+      id: `p${++this.state.pollSeq}`,
+      question,
+      options,
+      endsAt: Date.now() + durationMs,
+      status: "open",
+      voters: {},
+      createdAt: Date.now(),
+      closedAt: null,
+    };
+    this.state.activePoll = poll;
+    this.pushOverlay({
+      kind: "poll",
+      displayName: "Poll",
+      message: `Poll: ${question}`,
+    });
+    return { ok: true, poll: publicPoll(poll) };
+  }
+
+  /**
+   * @param {string} id
+   */
+  closePoll(id) {
+    const poll = this.state.activePoll;
+    if (!poll || poll.id !== id) return { ok: false, error: "not_found" };
+    if (poll.status === "closed") return { ok: true, poll: publicPoll(poll) };
+    poll.status = "closed";
+    poll.closedAt = Date.now();
+    // Keep closed poll visible briefly via endsAt for overlay; clear after 10s display
+    poll.endsAt = Date.now() + 10_000;
+    return { ok: true, poll: publicPoll(poll) };
+  }
+
+  /**
+   * @param {string} userId
+   * @param {string} optionId
+   */
+  castVote(userId, optionId) {
+    const poll = this.state.activePoll;
+    if (!poll || poll.status !== "open") {
+      return { ok: false, error: "no_poll" };
+    }
+    if (poll.endsAt && Date.now() >= poll.endsAt) {
+      this.closePoll(poll.id);
+      return { ok: false, error: "poll_closed" };
+    }
+    if (poll.voters[userId]) {
+      return {
+        ok: false,
+        error: "already_voted",
+        poll: publicPoll(poll),
+        viewer: publicViewer(this.state.viewers[userId]),
+      };
+    }
+    const option = poll.options.find((o) => o.id === optionId);
+    if (!option) return { ok: false, error: "bad_option" };
+
+    poll.voters[userId] = { optionId, paidVotes: 0 };
+    option.votes += 1;
+
+    return {
+      ok: true,
+      poll: publicPoll(poll),
+      viewer: publicViewer(this.state.viewers[userId]),
+    };
+  }
+
+  clearExpiredAlert() {
+    const alert = this.state.activeAlert;
+    if (alert?.endsAt && Date.now() >= alert.endsAt) {
+      if (alert.redeemId) {
+        const event = this.state.redeemLog.find((e) => e.id === alert.redeemId);
+        if (event && event.status === "playing" && event.type !== "song") {
+          this.finishRedeem(event.id, "done");
+          return;
+        }
+      }
+      this.state.activeAlert = null;
+    }
+
+    const poll = this.state.activePoll;
+    if (
+      poll?.status === "open" &&
+      poll.endsAt &&
+      Date.now() >= poll.endsAt
+    ) {
+      this.closePoll(poll.id);
+    } else if (
+      poll?.status === "closed" &&
+      poll.endsAt &&
+      Date.now() >= poll.endsAt
+    ) {
+      this.state.activePoll = null;
+    }
   }
 
   refreshPresence(now = Date.now()) {
@@ -360,6 +823,17 @@ export class LoyaltyRoom {
       leaderboard,
       recent: this.state.overlayEvents.slice(0, 10),
       queue: this.state.redeemLog.filter((e) => e.status === "queued").slice(0, 20),
+      nowPlaying: this.nowPlaying(),
+      activeAlert: this.state.activeAlert,
+      activePoll: publicPoll(this.state.activePoll),
+      wheel: {
+        segments: this.state.wheel.segments,
+        pendingResult: this.state.wheel.pendingResult,
+        cooldownMs: remainingCooldown(
+          this.state.wheel.lastSpinAt,
+          this.state.config.wheelCooldownMs,
+        ),
+      },
     };
   }
 
@@ -380,14 +854,25 @@ export class LoyaltyRoom {
 
 function freshState() {
   return {
-    config: { ...DEFAULT_CONFIG },
+    config: {
+      ...DEFAULT_CONFIG,
+      alertMs: { ...DEFAULT_CONFIG.alertMs },
+    },
     viewers: {},
     redeemLog: [],
     overlayEvents: [],
     redeemSeq: 0,
     overlaySeq: 0,
+    pollSeq: 0,
     lastChannelId: null,
     lastChannelAt: null,
+    activeAlert: null,
+    activePoll: null,
+    wheel: {
+      segments: DEFAULT_WHEEL_SEGMENTS.map((s) => ({ ...s })),
+      lastSpinAt: 0,
+      pendingResult: null,
+    },
   };
 }
 
@@ -396,17 +881,36 @@ function serializeState(state) {
 }
 
 function reviveState(saved) {
+  const base = freshState();
   return {
-    ...freshState(),
+    ...base,
     ...saved,
-    config: { ...DEFAULT_CONFIG, ...(saved.config || {}) },
+    config: {
+      ...base.config,
+      ...(saved.config || {}),
+      alertMs: {
+        ...base.config.alertMs,
+        ...(saved.config?.alertMs || {}),
+      },
+    },
     viewers: saved.viewers || {},
     redeemLog: saved.redeemLog || [],
     overlayEvents: saved.overlayEvents || [],
+    activeAlert: saved.activeAlert || null,
+    activePoll: saved.activePoll || null,
+    wheel: {
+      ...base.wheel,
+      ...(saved.wheel || {}),
+      segments:
+        saved.wheel?.segments?.length >= 2
+          ? saved.wheel.segments
+          : base.wheel.segments,
+    },
   };
 }
 
 function publicViewer(viewer) {
+  if (!viewer) return null;
   return {
     userId: viewer.userId,
     displayName: viewer.displayName,
@@ -416,6 +920,34 @@ function publicViewer(viewer) {
     spentTotal: viewer.spentTotal,
     lastHeartbeatAt: viewer.lastHeartbeatAt,
   };
+}
+
+function publicPoll(poll) {
+  if (!poll) return null;
+  return {
+    id: poll.id,
+    question: poll.question,
+    options: poll.options.map((o) => ({
+      id: o.id,
+      label: o.label,
+      votes: o.votes,
+    })),
+    endsAt: poll.endsAt,
+    status: poll.status,
+    createdAt: poll.createdAt,
+    closedAt: poll.closedAt,
+    totalVotes: poll.options.reduce((sum, o) => sum + o.votes, 0),
+    myVote: undefined,
+  };
+}
+
+function remainingCooldown(lastAt, cooldownMs) {
+  if (!lastAt || !cooldownMs) return 0;
+  return Math.max(0, lastAt + cooldownMs - Date.now());
+}
+
+function lastRedeemForUser(log, userId) {
+  return log.find((e) => e.userId === userId) || null;
 }
 
 /**

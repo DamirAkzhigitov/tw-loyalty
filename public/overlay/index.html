@@ -9,6 +9,29 @@
   <body>
     <div class="overlay">
       <p id="room" class="room">Connecting…</p>
+
+      <div id="alert" class="alert hidden" aria-live="polite">
+        <p class="alert-kicker" id="alert-kicker">Shoutout</p>
+        <p class="alert-name" id="alert-name"></p>
+        <p class="alert-text" id="alert-text"></p>
+      </div>
+
+      <div id="wheel-stage" class="wheel-stage hidden">
+        <div class="wheel-pointer"></div>
+        <div id="wheel" class="wheel"></div>
+        <p id="wheel-result" class="wheel-result"></p>
+      </div>
+
+      <section id="card-poll" class="card card-poll wide hidden">
+        <p class="label" id="poll-question">Poll</p>
+        <ul id="poll-options" class="poll-options"></ul>
+      </section>
+
+      <section id="card-now" class="card card-now wide hidden">
+        <p class="label">Now playing</p>
+        <p id="now-playing" class="now-playing"></p>
+      </section>
+
       <section id="card-watching" class="card card-watching hidden">
         <p class="label">Watching now</p>
         <ul id="watching" class="list"></ul>
