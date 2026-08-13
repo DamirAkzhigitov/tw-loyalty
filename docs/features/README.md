@@ -22,6 +22,7 @@ These are planning notes, not a commitment to ship everything. Prefer the **Sugg
 | 12 | Mini-game entry | [12-mini-games.md](./12-mini-games.md) |
 | 13 | Technical hardening | [13-technical-hardening.md](./13-technical-hardening.md) |
 | 14 | IRL / hardware (later) | [14-irl-hardware.md](./14-irl-hardware.md) |
+| — | Channel Points vs our currency (research) | [15-channel-points-research.md](./15-channel-points-research.md) |
 
 ## Architecture reminder
 

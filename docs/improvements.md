@@ -4,6 +4,8 @@ Notes from the early research and MVP: custom loyalty points (not Bits), earned 
 
 Bits stay optional. This system is meant to work with a small audience.
 
+**Channel Points:** we cannot drop in Twitch Channel Points as the panel currency. There is no balance or arbitrary-debit API; viewers redeem only in Twitch chat; the channel must be Affiliate/Partner. Converting Channel Points ↔ our points is against the Channel Points Acceptable Use Policy. Custom loyalty points in the Extension are allowed. Research: [`docs/features/15-channel-points-research.md`](./features/15-channel-points-research.md).
+
 **Implementation docs** for each planned feature (how to build, open questions, acceptance checks): [`docs/features/`](./features/README.md).
 
 ## Current MVP
@@ -105,6 +107,7 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 - Full Sound Alerts / Blerp clone.
 - Crowd Control–style in-game cheats (game-specific, heavy).
 - Bits catalog (needs Extension review + Bits policy). Useful after the free-points loop is fun.
+- Replacing our ledger with Channel Points (no wallet API; panel cannot charge them). Hybrid EventSub later is optional — see [Channel Points research](./features/15-channel-points-research.md).
 
 **Retention heuristic:** one meaningful action in the first 60 seconds (sound, vote, or cheap shoutout).
 
