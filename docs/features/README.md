@@ -26,7 +26,7 @@ These are planning notes, not a commitment to ship everything. Prefer the **Sugg
 ## Architecture reminder
 
 ```text
-Panel → POST /api/viewer/* → Worker → Durable Object (LoyaltyRoom)
+Video overlay HUD / panel → POST /api/viewer/* → Worker → Durable Object (LoyaltyRoom)
 OBS overlay → GET /api/overlay + WS /ws → same DO
 Admin (future) → /api/admin/* → same DO
 ```

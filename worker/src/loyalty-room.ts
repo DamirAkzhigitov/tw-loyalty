@@ -356,12 +356,18 @@ export class LoyaltyRoom {
     }
 
     if (request.method === "GET" && url.pathname === "/admin/redeems") {
+      this.refreshPresence();
+      this.clearExpiredAlert();
+      const overlay = this.overlayState();
       return json({
         redeems: room.redeemLog,
         nowPlaying: this.nowPlaying(),
         activeAlert: room.activeAlert,
         activePoll: room.activePoll,
         wheel: room.wheel,
+        watching: overlay.watching,
+        leaderboard: overlay.leaderboard,
+        recent: overlay.recent,
       });
     }
 

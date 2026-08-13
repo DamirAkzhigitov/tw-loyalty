@@ -34,7 +34,11 @@ async function handleRequest(
   url: URL,
 ): Promise<Response> {
   if (url.pathname === "/api/health") {
-    return json({ ok: true, runtime: "cloudflare-workers" });
+    return json({
+      ok: true,
+      runtime: "cloudflare-workers",
+      jwtConfigured: Boolean(env.EXT_SECRET),
+    });
   }
 
   if (url.pathname === "/" && request.method === "GET") {
@@ -95,7 +99,11 @@ async function handleApi(
       const result = await requireViewer(request, env);
       if (result.error) return result.error;
       identity = result.identity;
-    } catch {
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "";
+      if (reason === "EXT_SECRET is not configured") {
+        return json({ error: "ext_secret_missing" }, 503);
+      }
       return json({ error: "invalid_token" }, 401);
     }
 
@@ -300,6 +308,7 @@ function homeHtml(): string {
   <h1>Twitch Loyalty (Cloudflare Worker)</h1>
   <ul>
     <li><a href="/panel/">Extension panel</a></li>
+    <li><a href="/video-overlay/">Twitch video overlay HUD</a></li>
     <li><a href="/overlay/">OBS overlay</a></li>
     <li><a href="/admin/">Streamer admin (queue / poll)</a></li>
     <li><a href="/privacy/">Privacy policy</a></li>

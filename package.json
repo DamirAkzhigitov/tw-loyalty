@@ -2,12 +2,12 @@
   "name": "twitch-loyalty",
   "private": true,
   "version": "0.1.0",
-  "description": "Custom loyalty points via Twitch Extension panel + Cloudflare Worker",
+  "description": "Custom loyalty points via Twitch Extension HUD/panel + Cloudflare Worker",
   "scripts": {
     "dev": "npm --prefix worker run dev",
     "deploy": "npm --prefix worker run deploy",
     "typecheck": "npm --prefix worker run typecheck",
-    "pack:extension": "node -e \"require('node:fs').rmSync('twitch-extension.zip',{force:true}); require('node:child_process').execSync('tar -a -cf twitch-extension.zip -C public panel privacy config.html',{stdio:'inherit'})\"",
+    "pack:extension": "node -e \"require('node:fs').rmSync('twitch-extension.zip',{force:true}); require('node:child_process').execSync('tar -a -cf twitch-extension.zip -C public panel video-overlay ext-shared privacy config.html',{stdio:'inherit'})\"",
     "install:all": "npm --prefix worker install"
   },
   "engines": {

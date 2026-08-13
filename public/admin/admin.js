@@ -4,7 +4,10 @@ const API_BASE =
 
 const els = {
   channel: document.querySelector("#channel"),
+  password: document.querySelector("#password"),
   status: document.querySelector("#status"),
+  watching: document.querySelector("#watching"),
+  recent: document.querySelector("#recent"),
   queue: document.querySelector("#queue"),
   playingLine: document.querySelector("#playing-line"),
   pollForm: document.querySelector("#poll-form"),
@@ -18,14 +21,29 @@ const els = {
 const savedChannel =
   params.get("channel") || localStorage.getItem("loyaltyAdminChannel") || "local";
 els.channel.value = savedChannel;
+els.password.value =
+  params.get("password") || sessionStorage.getItem("loyaltyAdminPassword") || "";
 
 function channelId() {
   return els.channel.value.trim() || "local";
 }
 
+function password() {
+  return els.password.value.trim();
+}
+
 function setStatus(text, kind = "") {
   els.status.textContent = text;
   els.status.className = `status ${kind}`.trim();
+}
+
+function syncUrl() {
+  const next = new URL(location.href);
+  next.searchParams.set("channel", channelId());
+  const pw = password();
+  if (pw) next.searchParams.set("password", pw);
+  else next.searchParams.delete("password");
+  history.replaceState(null, "", `${next.pathname}${next.search}${next.hash}`);
 }
 
 function apiUrl(path) {
@@ -35,20 +53,36 @@ function apiUrl(path) {
 }
 
 async function api(path, options = {}) {
+  /** @type {Record<string, string>} */
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  const secret = password();
+  if (secret) headers["X-Admin-Secret"] = secret;
+
   const res = await fetch(apiUrl(path), {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || `http_${res.status}`);
+    const code = data.error || `http_${res.status}`;
+    const err = new Error(authErrorMessage(code, res.status));
     err.data = data;
     throw err;
   }
   return data;
+}
+
+function authErrorMessage(code, status) {
+  if (status === 403 || code === "forbidden") {
+    if (!password()) {
+      return "Add ?password=… to the URL (same value as ADMIN_SECRET).";
+    }
+    return "Forbidden. Set ADMIN_SECRET with wrangler, then use that exact password in the URL.";
+  }
+  return code;
 }
 
 function escapeHtml(value) {
@@ -57,6 +91,44 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function renderWatching(viewers) {
+  const list = viewers || [];
+  els.watching.innerHTML = "";
+  if (!list.length) {
+    els.watching.innerHTML = `<li class="empty">Nobody watching</li>`;
+    return;
+  }
+  for (const viewer of list) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="meta">
+        <span>${escapeHtml(viewer.displayName)}</span>
+        <span>${viewer.points} pts</span>
+      </div>
+    `;
+    els.watching.appendChild(li);
+  }
+}
+
+function renderRecent(events) {
+  const list = events || [];
+  els.recent.innerHTML = "";
+  if (!list.length) {
+    els.recent.innerHTML = `<li class="empty">No actions yet</li>`;
+    return;
+  }
+  for (const event of list) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="meta">
+        <span>${escapeHtml(event.displayName || "Viewer")}</span>
+        <span>${escapeHtml(event.message || event.kind || "")}</span>
+      </div>
+    `;
+    els.recent.appendChild(li);
+  }
 }
 
 function renderQueue(data) {
@@ -172,8 +244,12 @@ async function closePoll(id) {
 
 async function refresh() {
   localStorage.setItem("loyaltyAdminChannel", channelId());
+  sessionStorage.setItem("loyaltyAdminPassword", password());
+  syncUrl();
   try {
     const data = await api("/admin/redeems");
+    renderWatching(data.watching);
+    renderRecent(data.recent);
     renderQueue(data);
     renderPoll(data.activePoll);
     setStatus(`Channel ${channelId()} · refreshed`, "ok");
@@ -183,6 +259,7 @@ async function refresh() {
 }
 
 els.channel.addEventListener("change", () => void refresh());
+els.password.addEventListener("change", () => void refresh());
 els.pollForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const options = els.pollOptions.value

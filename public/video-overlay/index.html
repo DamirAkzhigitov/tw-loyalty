@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loyalty Overlay</title>
+    <link rel="stylesheet" href="./video-overlay.css" />
+    <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  </head>
+  <body>
+    <div class="hud" id="hud">
+      <button type="button" class="chip" id="chip" aria-expanded="false" aria-controls="sheet">
+        <span class="chip-label">Loyalty</span>
+        <strong id="points">0</strong>
+        <span class="chip-pts">pts</span>
+      </button>
+
+      <div class="sheet hidden" id="sheet">
+        <header class="sheet-header">
+          <div>
+            <p class="eyebrow">Loyalty</p>
+            <h1 id="display-name">Guest</h1>
+          </div>
+          <button type="button" class="ghost sheet-close" id="sheet-close">Close</button>
+        </header>
+
+        <p id="earn-rate" class="earn-rate">Earning while this overlay is open.</p>
+        <p id="status" class="status">Connecting…</p>
+        <button type="button" id="share-identity" class="share-identity hidden">
+          Show my Twitch name
+        </button>
+
+        <section id="poll-section" class="poll-section hidden">
+          <h2 id="poll-title">Poll</h2>
+          <div id="poll-options" class="poll-options"></div>
+          <p id="poll-hint" class="poll-hint"></p>
+        </section>
+
+        <section>
+          <h2>Spend</h2>
+          <div id="rewards" class="rewards"></div>
+        </section>
+
+        <form id="redeem-form" class="redeem-form hidden">
+          <label>
+            <span id="redeem-label">Message</span>
+            <input id="redeem-text" type="text" maxlength="160" autocomplete="off" />
+          </label>
+          <div class="form-actions">
+            <button type="button" id="redeem-cancel" class="ghost">Cancel</button>
+            <button type="submit" id="redeem-confirm">Confirm</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script type="module" src="./video-overlay.js"></script>
+  </body>
+</html>

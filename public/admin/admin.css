@@ -58,6 +58,13 @@ h2 {
   font-size: 20px;
 }
 
+.auth-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -226,9 +233,10 @@ button:disabled {
   font-weight: 600;
 }
 
-.hint a {
-  color: var(--ink);
+.hint code {
+  font-size: 13px;
   font-weight: 800;
+  color: var(--ink);
 }
 
 .empty {

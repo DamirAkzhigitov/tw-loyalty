@@ -13,19 +13,35 @@
           <p class="eyebrow">Streamer tools</p>
           <h1>Loyalty admin</h1>
         </div>
-        <label class="field">
-          Channel
-          <input id="channel" type="text" placeholder="local or Twitch channel id" />
-        </label>
+        <div class="auth-fields">
+          <label class="field">
+            Channel
+            <input id="channel" type="text" placeholder="Twitch channel id" autocomplete="off" />
+          </label>
+          <label class="field">
+            Password
+            <input id="password" type="password" placeholder="ADMIN_SECRET" autocomplete="current-password" />
+          </label>
+        </div>
       </header>
 
       <p id="status" class="status">Loading…</p>
 
       <section class="grid">
         <article class="panel">
+          <h2>Watching</h2>
+          <ul id="watching" class="queue"></ul>
+        </article>
+
+        <article class="panel">
           <h2>Redeem queue</h2>
           <p class="sub" id="playing-line">Nothing playing</p>
           <ul id="queue" class="queue"></ul>
+        </article>
+
+        <article class="panel">
+          <h2>Recent actions</h2>
+          <ul id="recent" class="queue"></ul>
         </article>
 
         <article class="panel">
@@ -52,8 +68,10 @@ Option B</textarea>
       </section>
 
       <p class="hint">
-        Dev tip: open <a href="/panel/">/panel/</a> to earn &amp; spend, and
-        <a href="/overlay/">/overlay/</a> for OBS. Use the same channel id everywhere.
+        Bookmark
+        <code>/admin/?channel=CHANNEL_ID&amp;password=ADMIN_SECRET</code>.
+        Production needs <code>npx wrangler secret put ADMIN_SECRET</code> first.
+        Local <code>DEV_MODE=1</code> does not require a password.
       </p>
     </main>
     <script type="module" src="./admin.js"></script>
