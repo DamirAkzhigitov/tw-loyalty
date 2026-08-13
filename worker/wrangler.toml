@@ -14,7 +14,7 @@ ip = "127.0.0.1"
 port = 8787
 
 [vars]
-DEV_MODE = "1"
+DEV_MODE = "0"
 # Optional: default channel room when Extension JWT has no channel_id
 DEFAULT_CHANNEL = "local"
 

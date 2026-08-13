@@ -3,6 +3,11 @@
  * In DEV_MODE, accepts X-Dev-User-Id headers so you can test without the Rig.
  */
 
+const ALLOWED_HEADERS =
+  "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Admin-Secret";
+
+const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
+
 /**
  * @param {Request} request
  * @param {{ DEV_MODE?: string, EXT_SECRET?: string }} env
@@ -14,16 +19,16 @@ export async function resolveIdentity(request, env) {
   }
 
   if (env.DEV_MODE !== "0") {
-    const userId = request.headers.get("X-Dev-User-Id");
+    const userId = sanitizeId(request.headers.get("X-Dev-User-Id"));
     if (userId) {
       return {
         userId,
         opaqueUserId: userId,
         displayName:
-          request.headers.get("X-Dev-Display-Name") ||
+          sanitizeDisplayName(request.headers.get("X-Dev-Display-Name")) ||
           `Dev-${userId.slice(-4)}`,
         role: "viewer",
-        channelId: request.headers.get("X-Dev-Channel-Id") || undefined,
+        channelId: sanitizeChannelId(request.headers.get("X-Dev-Channel-Id")),
         isDev: true,
       };
     }
@@ -48,6 +53,23 @@ export async function requireViewer(request, env) {
 }
 
 /**
+ * Production admin is closed unless ADMIN_SECRET is set and sent.
+ * Local DEV_MODE keeps admin open for testing.
+ * @param {Request} request
+ * @param {{ DEV_MODE?: string, ADMIN_SECRET?: string }} env
+ */
+export async function requireAdmin(request, env) {
+  if (env.DEV_MODE !== "0") return null;
+  const secret = env.ADMIN_SECRET;
+  if (!secret) return json({ error: "forbidden" }, 403);
+  const provided = request.headers.get("X-Admin-Secret") || "";
+  if (!(await secretsEqual(provided, secret))) {
+    return json({ error: "forbidden" }, 403);
+  }
+  return null;
+}
+
+/**
  * Minimal HS256 JWT verify for Twitch Extension tokens.
  * @param {string} token
  * @param {{ DEV_MODE?: string, EXT_SECRET?: string }} env
@@ -57,12 +79,16 @@ async function verifyExtensionToken(token, env) {
   if (parts.length !== 3) throw new Error("malformed token");
 
   const [headerB64, payloadB64, sigB64] = parts;
-  const secretB64 = env.EXT_SECRET;
-
-  if (!secretB64) {
-    if (env.DEV_MODE === "0") throw new Error("EXT_SECRET is not configured");
-    return normalizeClaims(JSON.parse(b64UrlToString(payloadB64)));
+  let header;
+  try {
+    header = JSON.parse(b64UrlToString(headerB64));
+  } catch {
+    throw new Error("malformed token");
   }
+  if (header.alg !== "HS256") throw new Error("bad token");
+
+  const secretB64 = env.EXT_SECRET;
+  if (!secretB64) throw new Error("EXT_SECRET is not configured");
 
   const key = await crypto.subtle.importKey(
     "raw",
@@ -80,7 +106,22 @@ async function verifyExtensionToken(token, env) {
   );
   if (!ok) throw new Error("bad signature");
 
-  return normalizeClaims(JSON.parse(b64UrlToString(payloadB64)));
+  let claims;
+  try {
+    claims = JSON.parse(b64UrlToString(payloadB64));
+  } catch {
+    throw new Error("malformed token");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof claims.exp !== "number" || now >= claims.exp) {
+    throw new Error("expired");
+  }
+  if (typeof claims.nbf === "number" && now < claims.nbf) {
+    throw new Error("not yet valid");
+  }
+
+  return normalizeClaims(claims);
 }
 
 function claimString(value) {
@@ -93,9 +134,8 @@ function claimString(value) {
  * @param {Record<string, unknown>} claims
  */
 function normalizeClaims(claims) {
-  const opaqueUserId = claimString(claims.opaque_user_id);
-  const twitchUserId = claimString(claims.user_id);
-  // Opaque id stays the wallet key so sharing identity does not create a second viewer.
+  const opaqueUserId = sanitizeId(claimString(claims.opaque_user_id));
+  const twitchUserId = sanitizeId(claimString(claims.user_id));
   const userId = opaqueUserId || twitchUserId;
 
   if (!userId) throw new Error("token missing user id");
@@ -104,12 +144,9 @@ function normalizeClaims(claims) {
     userId,
     opaqueUserId: opaqueUserId || userId,
     twitchUserId: twitchUserId || undefined,
-    displayName:
-      typeof claims.preferred_username === "string"
-        ? claims.preferred_username
-        : undefined,
+    displayName: sanitizeDisplayName(claims.preferred_username),
     role: typeof claims.role === "string" ? claims.role : "viewer",
-    channelId: claimString(claims.channel_id) || undefined,
+    channelId: sanitizeChannelId(claimString(claims.channel_id)),
     isDev: false,
   };
 }
@@ -123,24 +160,110 @@ export function json(body, status = 200) {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers":
-        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name, X-Admin-Secret",
-      "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     },
   });
 }
 
-export function corsPreflight() {
+/**
+ * @param {Request} request
+ */
+export function corsPreflight(request) {
   return new Response(null, {
     status: 204,
-    headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers":
-        "Content-Type, Authorization, X-Dev-User-Id, X-Dev-Display-Name, X-Dev-Channel-Id, X-Viewer-Name, X-Admin-Secret",
-      "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
-    },
+    headers: corsHeaderMap(request),
   });
+}
+
+/**
+ * @param {Request} request
+ * @param {Response} response
+ */
+export function withCors(request, response) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaderMap(request))) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/**
+ * @param {Request} request
+ */
+function corsHeaderMap(request) {
+  /** @type {Record<string, string>} */
+  const headers = {
+    "access-control-allow-headers": ALLOWED_HEADERS,
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+  };
+  const origin = request.headers.get("Origin") || "";
+  if (isAllowedOrigin(origin, request)) {
+    headers["access-control-allow-origin"] = origin;
+    headers.vary = "Origin";
+  }
+  return headers;
+}
+
+/**
+ * @param {string} origin
+ * @param {Request} request
+ */
+function isAllowedOrigin(origin, request) {
+  if (!origin) return false;
+  let url;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  if (host.endsWith(".ext-twitch.tv") || host === "ext-twitch.tv") return true;
+  if (host === "twitch.tv" || host.endsWith(".twitch.tv")) return true;
+  try {
+    if (host === new URL(request.url).hostname.toLowerCase()) return true;
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+export function sanitizeId(value) {
+  const id = String(value || "").trim();
+  if (!id || BLOCKED_IDS.has(id) || id.length > 128) return "";
+  return id;
+}
+
+export function sanitizeChannelId(value) {
+  const id = String(value || "").trim();
+  if (!id || BLOCKED_IDS.has(id) || id.length > 64) return "";
+  return id;
+}
+
+export function sanitizeDisplayName(value) {
+  if (typeof value !== "string") return "";
+  const cleaned = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  if (!cleaned) return "";
+  return cleaned.slice(0, 25);
+}
+
+/**
+ * @param {string} a
+ * @param {string} b
+ */
+async function secretsEqual(a, b) {
+  const enc = new TextEncoder();
+  const left = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", enc.encode(a)),
+  );
+  const right = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", enc.encode(b)),
+  );
+  return crypto.subtle.timingSafeEqual(left, right);
 }
 
 function b64UrlToString(value) {

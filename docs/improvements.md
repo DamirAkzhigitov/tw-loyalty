@@ -4,6 +4,8 @@ Notes from the early research and MVP: custom loyalty points (not Bits), earned 
 
 Bits stay optional. This system is meant to work with a small audience.
 
+**Implementation docs** for each planned feature (how to build, open questions, acceptance checks): [`docs/features/`](./features/README.md).
+
 ## Current MVP
 
 - Earn: **1 point / second** while the panel is visible (heartbeat).
@@ -119,8 +121,8 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 
 ## 5. Technical follow-ups
 
-- **`EXT_SECRET`** + `DEV_MODE=0` in production; verify Extension JWTs.
-- Lock **`/api/admin/*`** (shared secret or streamer OAuth).
+- **`EXT_SECRET`** + `DEV_MODE=0` in production; verify Extension JWTs. (JWT alg/exp required; unsigned tokens rejected.)
+- Lock **`/api/admin/*`** — production requires `ADMIN_SECRET` / `X-Admin-Secret`; unset secret disables admin.
 - Durable Object is enough for one channel; **D1/SQLite** if we need history, analytics, or multi-device recovery beyond DO storage.
 - TTS: Worker queues → overlay or a local helper (Streamer.bot / browser TTS) plays audio.
 - Music: store URL + title; never autoplay untrusted audio without a queue.
@@ -131,10 +133,12 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 
 ## Suggested build order
 
-1. Play TTS and song from the queue (even if streamer clicks “Play” in a simple admin page).
-2. Overlay alerts that match those redeems.
-3. Challenge wheel spend + overlay spin.
-4. Panel UI polish (costs, disabled state, queued feedback).
-5. Poll / vote.
-6. Economy tuning after a few real streams.
+1. Play TTS and song from the queue (even if streamer clicks “Play” in a simple admin page) — [doc](./features/01-redeem-queue-playback.md).
+2. Overlay alerts that match those redeems — [doc](./features/02-overlay-alerts.md).
+3. Challenge wheel spend + overlay spin — [doc](./features/03-challenge-wheel.md).
+4. Panel UI polish (costs, disabled state, queued feedback) — [doc](./features/04-panel-ui-polish.md).
+5. Poll / vote — [doc](./features/05-poll-vote.md).
+6. Economy tuning after a few real streams — [doc](./features/06-economy-tuning.md).
 7. Public Extension listing / Bits only if we want directory distribution.
+
+Full list (including later toys, admin UI, hardening): [`docs/features/README.md`](./features/README.md).

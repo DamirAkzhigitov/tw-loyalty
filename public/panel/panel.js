@@ -80,7 +80,6 @@ function authHeaders() {
   const headers = { "Content-Type": "application/json" };
   if (authMode === "twitch" && authToken) {
     headers.Authorization = `Bearer ${authToken}`;
-    if (twitchDisplayName) headers["X-Viewer-Name"] = twitchDisplayName;
   } else {
     headers["X-Dev-User-Id"] = DEV_USER;
     headers["X-Dev-Display-Name"] = DEV_NAME;
@@ -221,7 +220,9 @@ async function submitRedeem(text) {
       code === "insufficient_points"
         ? "Not enough points"
         : code === "cooldown"
-          ? `Cooldown ${formatMs(err.data.cooldownMs || 0)}`
+          ? err.data.cooldownMs
+            ? `Cooldown ${formatMs(err.data.cooldownMs)}`
+            : "Too fast — wait a second"
           : err.message;
     setStatus(msg, "err");
   } finally {
@@ -290,12 +291,9 @@ async function castVote(optionId) {
 }
 
 function sessionBody() {
-  const twitchUserId = window.Twitch?.ext?.viewer?.id || undefined;
   return JSON.stringify({
-    displayName: twitchDisplayName || undefined,
     helixToken: helixToken || undefined,
     clientId: twitchClientId || undefined,
-    twitchUserId,
   });
 }
 

@@ -73,7 +73,7 @@ Optional secrets / vars:
 npx wrangler secret put EXT_SECRET   # Twitch Extension secret (base64)
 ```
 
-In `wrangler.toml`, set `DEV_MODE = "0"` for production.
+`wrangler.toml` ships `DEV_MODE = "0"`. Local `worker/.dev.vars` keeps `DEV_MODE=1` for the Rig-less panel. Optional: `npx wrangler secret put ADMIN_SECRET` to use `/api/admin/*` in production (`X-Admin-Secret`).
 
 ## Twitch Extension
 
@@ -125,5 +125,5 @@ backend/         Old local Node prototype (optional; unused)
 ## Notes
 
 - Default economy: **1 point / second** while the panel tab is visible
-- Admin routes (`/api/admin/*`) are open in dev — lock them down before production
+- Admin routes (`/api/admin/*`) are open in local DEV_MODE only; production needs `ADMIN_SECRET`
 - TTS / music playback is not wired yet (queue only)
