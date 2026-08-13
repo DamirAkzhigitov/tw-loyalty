@@ -1,0 +1,16 @@
+{
+  "name": "Twitch Loyalty",
+  "install": "npm --prefix worker install",
+  "terminals": [
+    {
+      "name": "worker-dev",
+      "command": "npm --prefix worker run dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "worker-dev",
+      "port": 8787
+    }
+  ]
+}
