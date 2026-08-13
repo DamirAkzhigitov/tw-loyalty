@@ -1,5 +1,22 @@
 /** Catalog of spendable actions. */
-export const REWARDS = [
+
+export type Reward = {
+  id: string;
+  label: string;
+  cost: number;
+  description: string;
+  needsText: boolean;
+  maxLength?: number;
+};
+
+export type WheelSegment = {
+  id: string;
+  label: string;
+  weight: number;
+  color?: string;
+};
+
+export const REWARDS: Reward[] = [
   {
     id: "shoutout",
     label: "On-screen shoutout",
@@ -33,7 +50,7 @@ export const REWARDS = [
 ];
 
 /** Default weighted wheel segments (relative weights). */
-export const DEFAULT_WHEEL_SEGMENTS = [
+export const DEFAULT_WHEEL_SEGMENTS: WheelSegment[] = [
   { id: "easy", label: "Easy challenge", weight: 30, color: "#12b5a7" },
   { id: "hard", label: "Hard challenge", weight: 10, color: "#ff5d4a" },
   { id: "water", label: "Drink water", weight: 20, color: "#2f9ed8" },
@@ -42,20 +59,18 @@ export const DEFAULT_WHEEL_SEGMENTS = [
   { id: "chaos", label: "Super chaos", weight: 5, color: "#d61f3a" },
 ];
 
-/**
- * @param {string} type
- */
-export function getReward(type) {
+export function getReward(type: string): Reward | null {
   return REWARDS.find((r) => r.id === type) ?? null;
 }
 
-/**
- * @param {{ id: string, label: string, weight: number, color?: string }[]} segments
- * @param {number} [rand] 0..1
- */
-export function pickWeightedSegment(segments, rand = Math.random()) {
+export function pickWeightedSegment(
+  segments: WheelSegment[],
+  rand = Math.random(),
+): { segment: WheelSegment; index: number } | null {
   const total = segments.reduce((sum, s) => sum + Math.max(0, s.weight || 0), 0);
-  if (total <= 0) return segments[0] || null;
+  if (total <= 0) {
+    return segments[0] ? { segment: segments[0], index: 0 } : null;
+  }
   let cursor = rand * total;
   for (let i = 0; i < segments.length; i++) {
     cursor -= Math.max(0, segments[i].weight || 0);

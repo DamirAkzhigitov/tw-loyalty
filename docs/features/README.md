@@ -31,7 +31,7 @@ OBS overlay → GET /api/overlay + WS /ws → same DO
 Admin (future) → /api/admin/* → same DO
 ```
 
-New rewards belong in `worker/src/rewards.js` and must work as **queued** events until playback exists. Shared state stays in the Durable Object until history/analytics justify D1.
+New rewards belong in `worker/src/rewards.ts` and must work as **queued** events until playback exists. Shared state stays in the Durable Object until history/analytics justify D1.
 
 ## Doc template (for new features)
 

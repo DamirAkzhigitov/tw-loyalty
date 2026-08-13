@@ -8,11 +8,20 @@ const ALLOWED_HEADERS =
 
 const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
 
-/**
- * @param {Request} request
- * @param {{ DEV_MODE?: string, EXT_SECRET?: string }} env
- */
-export async function resolveIdentity(request, env) {
+export type Identity = {
+  userId: string;
+  opaqueUserId: string;
+  twitchUserId?: string;
+  displayName: string;
+  role: string;
+  channelId: string;
+  isDev: boolean;
+};
+
+export async function resolveIdentity(
+  request: Request,
+  env: Env,
+): Promise<Identity | null> {
   const auth = request.headers.get("Authorization");
   if (auth?.startsWith("Bearer ")) {
     return verifyExtensionToken(auth.slice("Bearer ".length).trim(), env);
@@ -37,11 +46,10 @@ export async function resolveIdentity(request, env) {
   return null;
 }
 
-/**
- * @param {Request} request
- * @param {{ DEV_MODE?: string, EXT_SECRET?: string }} env
- */
-export async function requireViewer(request, env) {
+export async function requireViewer(
+  request: Request,
+  env: Env,
+): Promise<{ identity: Identity; error: null } | { identity: null; error: Response }> {
   const identity = await resolveIdentity(request, env);
   if (!identity?.userId) {
     return {
@@ -55,10 +63,11 @@ export async function requireViewer(request, env) {
 /**
  * Production admin is closed unless ADMIN_SECRET is set and sent.
  * Local DEV_MODE keeps admin open for testing.
- * @param {Request} request
- * @param {{ DEV_MODE?: string, ADMIN_SECRET?: string }} env
  */
-export async function requireAdmin(request, env) {
+export async function requireAdmin(
+  request: Request,
+  env: Env,
+): Promise<Response | null> {
   if (env.DEV_MODE !== "0") return null;
   const secret = env.ADMIN_SECRET;
   if (!secret) return json({ error: "forbidden" }, 403);
@@ -69,19 +78,14 @@ export async function requireAdmin(request, env) {
   return null;
 }
 
-/**
- * Minimal HS256 JWT verify for Twitch Extension tokens.
- * @param {string} token
- * @param {{ DEV_MODE?: string, EXT_SECRET?: string }} env
- */
-async function verifyExtensionToken(token, env) {
+async function verifyExtensionToken(token: string, env: Env): Promise<Identity> {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("malformed token");
 
   const [headerB64, payloadB64, sigB64] = parts;
-  let header;
+  let header: { alg?: string };
   try {
-    header = JSON.parse(b64UrlToString(headerB64));
+    header = JSON.parse(b64UrlToString(headerB64)) as { alg?: string };
   } catch {
     throw new Error("malformed token");
   }
@@ -106,9 +110,9 @@ async function verifyExtensionToken(token, env) {
   );
   if (!ok) throw new Error("bad signature");
 
-  let claims;
+  let claims: Record<string, unknown>;
   try {
-    claims = JSON.parse(b64UrlToString(payloadB64));
+    claims = JSON.parse(b64UrlToString(payloadB64)) as Record<string, unknown>;
   } catch {
     throw new Error("malformed token");
   }
@@ -124,16 +128,13 @@ async function verifyExtensionToken(token, env) {
   return normalizeClaims(claims);
 }
 
-function claimString(value) {
+function claimString(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "";
 }
 
-/**
- * @param {Record<string, unknown>} claims
- */
-function normalizeClaims(claims) {
+function normalizeClaims(claims: Record<string, unknown>): Identity {
   const opaqueUserId = sanitizeId(claimString(claims.opaque_user_id));
   const twitchUserId = sanitizeId(claimString(claims.user_id));
   const userId = opaqueUserId || twitchUserId;
@@ -151,11 +152,7 @@ function normalizeClaims(claims) {
   };
 }
 
-/**
- * @param {unknown} body
- * @param {number} status
- */
-export function json(body, status = 200) {
+export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -164,21 +161,14 @@ export function json(body, status = 200) {
   });
 }
 
-/**
- * @param {Request} request
- */
-export function corsPreflight(request) {
+export function corsPreflight(request: Request): Response {
   return new Response(null, {
     status: 204,
     headers: corsHeaderMap(request),
   });
 }
 
-/**
- * @param {Request} request
- * @param {Response} response
- */
-export function withCors(request, response) {
+export function withCors(request: Request, response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(corsHeaderMap(request))) {
     headers.set(key, value);
@@ -190,12 +180,8 @@ export function withCors(request, response) {
   });
 }
 
-/**
- * @param {Request} request
- */
-function corsHeaderMap(request) {
-  /** @type {Record<string, string>} */
-  const headers = {
+function corsHeaderMap(request: Request): Record<string, string> {
+  const headers: Record<string, string> = {
     "access-control-allow-headers": ALLOWED_HEADERS,
     "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
   };
@@ -207,13 +193,9 @@ function corsHeaderMap(request) {
   return headers;
 }
 
-/**
- * @param {string} origin
- * @param {Request} request
- */
-function isAllowedOrigin(origin, request) {
+function isAllowedOrigin(origin: string, request: Request): boolean {
   if (!origin) return false;
-  let url;
+  let url: URL;
   try {
     url = new URL(origin);
   } catch {
@@ -232,30 +214,26 @@ function isAllowedOrigin(origin, request) {
   return false;
 }
 
-export function sanitizeId(value) {
+export function sanitizeId(value: unknown): string {
   const id = String(value || "").trim();
   if (!id || BLOCKED_IDS.has(id) || id.length > 128) return "";
   return id;
 }
 
-export function sanitizeChannelId(value) {
+export function sanitizeChannelId(value: unknown): string {
   const id = String(value || "").trim();
   if (!id || BLOCKED_IDS.has(id) || id.length > 64) return "";
   return id;
 }
 
-export function sanitizeDisplayName(value) {
+export function sanitizeDisplayName(value: unknown): string {
   if (typeof value !== "string") return "";
   const cleaned = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
   if (!cleaned) return "";
   return cleaned.slice(0, 25);
 }
 
-/**
- * @param {string} a
- * @param {string} b
- */
-async function secretsEqual(a, b) {
+async function secretsEqual(a: string, b: string): Promise<boolean> {
   const enc = new TextEncoder();
   const left = new Uint8Array(
     await crypto.subtle.digest("SHA-256", enc.encode(a)),
@@ -266,17 +244,17 @@ async function secretsEqual(a, b) {
   return crypto.subtle.timingSafeEqual(left, right);
 }
 
-function b64UrlToString(value) {
+function b64UrlToString(value: string): string {
   return new TextDecoder().decode(b64UrlToBytes(value));
 }
 
-function b64UrlToBytes(value) {
+function b64UrlToBytes(value: string): Uint8Array {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/");
   const pad = "=".repeat((4 - (padded.length % 4)) % 4);
   return b64ToBytes(padded + pad);
 }
 
-function b64ToBytes(value) {
+function b64ToBytes(value: string): Uint8Array {
   const bin = atob(value);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

@@ -47,6 +47,7 @@ Workers are stateless. Shared points, presence, redeem queue, and overlay WebSoc
 cd worker
 npm install
 npm run dev      # http://127.0.0.1:8787
+npm run typecheck
 npm run deploy   # https://twitch-loyalty.damir-cy.workers.dev
 ```
 
@@ -78,11 +79,11 @@ Do not merge all traffic into `local` unless you are explicitly simplifying to a
 ## Conventions
 
 - Keep the panel small and obvious: balance + a few spend actions. Do not turn it into a dashboard.
-- New rewards go in `worker/src/rewards.js` and must work as **queued** events until playback exists.
+- New rewards go in `worker/src/rewards.ts` and must work as **queued** events until playback exists.
 - Overlay is for on-stream visuals; the Extension **panel** is for clicking. Do not replace the OBS overlay with a Twitch Overlay Extension unless that is an explicit product decision.
 - Economy: 1 point/second is for testing. Live streams should use a slower rate, caps, and cooldowns (`docs/improvements.md`).
 - Prefer Durable Object storage until a real DB is justified (history, analytics, multi-device).
-- JavaScript modules in the Worker (no extra bundler). Panel/overlay are static HTML/CSS/JS.
+- TypeScript in the Worker (`npm run typecheck`; Wrangler compiles on `dev`/`deploy`). Panel/overlay stay static HTML/CSS/JS for Twitch and OBS.
 
 ## Out of scope unless asked
 
