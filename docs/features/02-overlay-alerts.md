@@ -98,7 +98,7 @@ activeAlert: null | {
 
 - Overlay must stay performant (OBS Browser Source can be heavy with video embeds).
 - YouTube iframe in overlay is fragile (autoplay, login, ads) — prefer helper for music.
-- Do not replace OBS overlay with a Twitch Overlay Extension unless that is an explicit product decision (`AGENTS.md`).
+- Do not replace OBS overlay with the Twitch video overlay HUD. They are different surfaces (`AGENTS.md`).
 
 ---
 

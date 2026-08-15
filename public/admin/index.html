@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loyalty Admin</title>
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="top">
+        <div>
+          <p class="eyebrow">Streamer tools</p>
+          <h1>Loyalty admin</h1>
+        </div>
+        <div class="auth-fields">
+          <label class="field">
+            Channel
+            <input id="channel" type="text" placeholder="Twitch channel id" autocomplete="off" />
+          </label>
+          <label class="field">
+            Password
+            <input id="password" type="password" placeholder="ADMIN_SECRET" autocomplete="current-password" />
+          </label>
+        </div>
+      </header>
+
+      <p id="status" class="status">Loading…</p>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Watching</h2>
+          <ul id="watching" class="queue"></ul>
+        </article>
+
+        <article class="panel">
+          <h2>Redeem queue</h2>
+          <p class="sub" id="playing-line">Nothing playing</p>
+          <ul id="queue" class="queue"></ul>
+        </article>
+
+        <article class="panel">
+          <h2>Recent actions</h2>
+          <ul id="recent" class="queue"></ul>
+        </article>
+
+        <article class="panel">
+          <h2>Start a poll</h2>
+          <form id="poll-form" class="poll-form">
+            <label>
+              Question
+              <input id="poll-question" type="text" maxlength="120" required placeholder="What next?" />
+            </label>
+            <label>
+              Options (2–4, one per line)
+              <textarea id="poll-options" rows="4" required>Option A
+Option B</textarea>
+            </label>
+            <label>
+              Duration (seconds)
+              <input id="poll-duration" type="number" min="10" max="600" value="60" />
+            </label>
+            <button type="submit">Open poll</button>
+          </form>
+          <div id="poll-live" class="poll-live hidden"></div>
+          <button type="button" id="poll-close" class="ghost hidden">Close poll</button>
+        </article>
+      </section>
+
+      <p class="hint">
+        Bookmark
+        <code>/admin/?channel=CHANNEL_ID&amp;password=ADMIN_SECRET</code>.
+        Production needs <code>npx wrangler secret put ADMIN_SECRET</code> first.
+        Local <code>DEV_MODE=1</code> does not require a password.
+      </p>
+    </main>
+    <script type="module" src="./admin.js"></script>
+  </body>
+</html>

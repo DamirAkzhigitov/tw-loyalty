@@ -5,6 +5,9 @@ import {
 } from "../ext-shared/client.js";
 
 const els = {
+  chip: document.querySelector("#chip"),
+  sheet: document.querySelector("#sheet"),
+  sheetClose: document.querySelector("#sheet-close"),
   displayName: document.querySelector("#display-name"),
   points: document.querySelector("#points"),
   status: document.querySelector("#status"),
@@ -22,13 +25,22 @@ const els = {
   pollHint: document.querySelector("#poll-hint"),
 };
 
+let expanded = false;
+let redeemFormOpen = false;
+
+function setExpanded(next) {
+  expanded = next;
+  els.sheet.classList.toggle("hidden", !expanded);
+  els.chip.setAttribute("aria-expanded", expanded ? "true" : "false");
+}
+
 function setStatus(text, kind = "") {
   els.status.textContent = text;
   els.status.className = `status ${kind}`.trim();
 }
 
 const client = createLoyaltyClient({
-  earnSurface: "panel",
+  earnSurface: "overlay",
   isRedeemFormOpen: () => Boolean(els.form && !els.form.classList.contains("hidden")),
   onChange: render,
   onStatus: setStatus,
@@ -79,7 +91,10 @@ function renderRewards(state) {
       </div>
       <div class="reward-desc">${extra}</div>
     `;
-    btn.addEventListener("click", () => client.openRedeem(reward));
+    btn.addEventListener("click", () => {
+      setExpanded(true);
+      client.openRedeem(reward);
+    });
     els.rewards.appendChild(btn);
   }
 }
@@ -123,8 +138,6 @@ function renderPoll(state) {
   }
 }
 
-let redeemFormOpen = false;
-
 function renderRedeemForm(state) {
   const reward = state.pendingReward;
   if (!reward?.needsText) {
@@ -137,6 +150,7 @@ function renderRedeemForm(state) {
   }
   const justOpened = !redeemFormOpen;
   redeemFormOpen = true;
+  setExpanded(true);
   els.form.classList.remove("hidden");
   els.redeemLabel.textContent = reward.id === "song" ? "Song / link" : "Message";
   if (reward.maxLength) els.redeemText.maxLength = reward.maxLength;
@@ -147,6 +161,15 @@ function renderRedeemForm(state) {
   }
 }
 
+els.chip.addEventListener("click", () => {
+  const next = !expanded;
+  if (!next) client.closeRedeem();
+  setExpanded(next);
+});
+els.sheetClose.addEventListener("click", () => {
+  client.closeRedeem();
+  setExpanded(false);
+});
 els.redeemCancel.addEventListener("click", () => client.closeRedeem());
 els.shareIdentity?.addEventListener("click", () => client.requestIdentityShare());
 els.form.addEventListener("submit", (event) => {
@@ -156,5 +179,7 @@ els.form.addEventListener("submit", (event) => {
     els.redeemConfirm.disabled = false;
   });
 });
+
+if (window === window.top) document.body.classList.add("dev-preview");
 
 client.boot();

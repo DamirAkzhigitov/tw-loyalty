@@ -68,7 +68,7 @@ Later (not required): sub/regular multipliers, watch-streak bonus, decay.
 ## Open questions
 
 1. Cap timezone: UTC vs broadcaster local?
-2. Does presence alone earn, or require visible panel only? (Today: panel heartbeat — keep that.)
+2. Does presence alone earn, or require a visible HUD/panel? (Today: heartbeat only while the overlay/panel is visible — keep that.)
 3. Refund song after Play started but skipped mid-track?
 4. Should costs scale with rate automatically, or stay fixed while rate changes?
 5. Multipliers for subs — Twitch auth scope / badge check complexity worth it?

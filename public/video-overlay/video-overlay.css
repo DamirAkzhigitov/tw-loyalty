@@ -17,75 +17,129 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+body.dev-preview {
+  background: #1a2744;
+  pointer-events: auto;
+}
+
+.hud {
+  pointer-events: auto;
+  position: absolute;
+  left: 12px;
+  bottom: 72px;
+  width: min(280px, calc(100% - 24px));
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
   background: var(--bg);
   color: var(--ink);
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--accent-2);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
 }
 
-.panel {
-  padding: 16px;
+.chip:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--accent-2);
+}
+
+.chip-label {
+  color: var(--mint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chip strong {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-pts {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sheet {
+  width: 100%;
+  max-height: min(70vh, 420px);
+  overflow: auto;
   display: grid;
-  gap: 16px;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg);
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--mint);
 }
 
-.header {
+.sheet.hidden {
+  display: none;
+}
+
+.sheet-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   align-items: start;
 }
 
 .eyebrow {
   margin: 0;
   color: var(--mint);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 h1 {
-  margin: 4px 0 0;
-  font-size: 24px;
+  margin: 2px 0 0;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1.1;
 }
 
 h2 {
-  margin: 0 0 10px;
-  font-size: 16px;
+  margin: 0 0 8px;
+  font-size: 14px;
   color: var(--ink);
   font-weight: 800;
 }
 
-.points-box {
-  background: var(--card);
-  border: 3px solid var(--line);
-  border-radius: 14px;
-  padding: 8px 12px;
-  min-width: 96px;
-  text-align: right;
-  box-shadow: 3px 3px 0 var(--accent-2);
-}
-
-.points-label {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.points-box strong {
-  font-size: 32px;
-  line-height: 1;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
+.sheet-close {
+  flex-shrink: 0;
+  padding: 6px 10px;
 }
 
 .status {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--muted);
 }
@@ -113,7 +167,7 @@ h2 {
 
 .rewards {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .reward {
@@ -121,23 +175,20 @@ h2 {
   text-align: left;
   background: var(--card);
   border: 3px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--ink);
-  padding: 12px 14px;
+  padding: 8px 10px;
   cursor: pointer;
   box-shadow: 3px 3px 0 var(--mint);
 }
 
 .reward:hover {
   background: #fff;
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--mint);
 }
 
 .reward:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
   box-shadow: 3px 3px 0 var(--line);
 }
 
@@ -146,7 +197,7 @@ h2 {
   justify-content: space-between;
   gap: 8px;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .reward-cost {
@@ -155,19 +206,19 @@ h2 {
 }
 
 .reward-desc {
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .redeem-form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   background: var(--card);
   border: 3px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 12px;
+  padding: 10px;
   box-shadow: 3px 3px 0 var(--accent);
 }
 
@@ -177,8 +228,8 @@ h2 {
 
 .redeem-form label {
   display: grid;
-  gap: 6px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -188,9 +239,9 @@ h2 {
   border: 3px solid var(--line);
   border-radius: 10px;
   color: var(--ink);
-  padding: 10px 12px;
+  padding: 8px 10px;
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .form-actions {
@@ -203,7 +254,7 @@ button {
   font: inherit;
   border-radius: 10px;
   border: 0;
-  padding: 10px 14px;
+  padding: 8px 12px;
   cursor: pointer;
 }
 
@@ -222,16 +273,9 @@ button.ghost {
   font-weight: 700;
 }
 
-.hint {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
 .earn-rate {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--mint);
 }
@@ -242,7 +286,7 @@ button.ghost {
 
 .poll-section {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .poll-section.hidden {
@@ -251,7 +295,7 @@ button.ghost {
 
 .poll-options {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .poll-option {
@@ -259,9 +303,9 @@ button.ghost {
   text-align: left;
   background: var(--card);
   border: 3px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--ink);
-  padding: 12px 14px;
+  padding: 8px 10px;
   cursor: pointer;
   font-weight: 800;
   box-shadow: 3px 3px 0 #2f9ed8;
@@ -279,14 +323,7 @@ button.ghost {
 
 .poll-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--muted);
-}
-
-.reward-need {
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--danger);
 }

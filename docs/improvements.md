@@ -1,6 +1,6 @@
 # Improvement plans
 
-Notes from the early research and MVP: custom loyalty points (not Bits), earned while the **Twitch Extension panel** is open, spent on stream moments, shown on an **OBS overlay**.
+Notes from the early research and MVP: custom loyalty points (not Bits), earned while the **Twitch video overlay HUD** (recommended) or **Extension panel** (alternate slot) is visible, spent on stream moments, shown on an **OBS overlay**.
 
 Bits stay optional. This system is meant to work with a small audience.
 
@@ -8,9 +8,10 @@ Bits stay optional. This system is meant to work with a small audience.
 
 ## Current MVP
 
-- Earn: **1 point / second** while the panel is visible (heartbeat).
+- Earn: **1 point / second** while the video overlay HUD or panel is visible (heartbeat). Overlay loads for every web viewer on a live channel — slow the rate before a real stream.
 - Spend (queued only, not played yet): shoutout, TTS, song request.
-- Overlay: watching list, leaderboard, live feed.
+- Viewer UI: Twitch **video overlay HUD** (chip on the player; recommended live slot) plus **panel** as an alternate slot. One desktop slot at a time.
+- OBS overlay: watching list, leaderboard, live feed (not the Twitch HUD).
 - Backend: Cloudflare Worker + Durable Object per channel (no SQL DB yet).
 
 ---
@@ -55,10 +56,21 @@ Pick a few; do not dump the whole shop on a 318×496 panel.
 
 ## 2. UI improvements
 
-Panel is a Twitch **panel**: about **318×496px**. Overlay is OBS, not a Twitch Overlay Extension.
+A channel can activate this Extension in **only one desktop slot**: Overlay **or** Panel (plus Mobile). Recommended live: **Overlay 1**. Keep the panel in the zip as an alternate and as the **Mobile** view (`panel/index.html`).
+
+**Twitch video overlay HUD** (`public/video-overlay/`) is a per-viewer iframe on the player. **OBS overlay** (`public/overlay/`) is burned into the stream. Do not merge them.
+
+### Twitch video overlay HUD
+
+- Collapsed **Loyalty chip** (points) lower-left, above the player control bar.
+- Click expands a compact spend sheet (same rewards / poll / identity as the panel).
+- Transparent iframe; click-through except the HUD.
+- Pause earning when the viewer hides the overlay or the tab is hidden.
+- Do not paste the 318×496 panel onto the video.
 
 ### Extension panel
 
+- Twitch **panel**: about **318×496px**. Alternate desktop slot; also the mobile view.
 - Clear **first-minute action**: balance + 2–3 spend buttons, not a long list.
 - Show **earn rate** (“+1 / sec while this panel is open”).
 - Disable unaffordable rewards; show “need X more”.
@@ -92,7 +104,7 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 
 | Loop | Viewer action | On stream |
 |------|----------------|-----------|
-| Presence | Keep panel open | Name on “watching” + points tick |
+| Presence | Keep HUD/panel visible | Name on “watching” + points tick |
 | Voice | Spend TTS | Audio + overlay caption |
 | Music | Spend song | Track plays after approve |
 | Chaos | Spend wheel | Overlay spin + challenge card |
@@ -112,7 +124,7 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 
 ## 4. Economy
 
-- **1 point / second** is fast (3600/hour). Fine for testing; for live streams consider **1–10 / minute**, daily caps, and first-open bonus.
+- **1 point / second** is fast (3600/hour). Fine for testing; for live streams consider **1–10 / minute**, daily caps, and first-open bonus. The video overlay HUD heartbeats every web viewer on a live channel, so slow the rate before going live with Overlay 1.
 - Cooldowns per reward and per user (TTS spam).
 - Sub / regular multipliers later — not required for MVP.
 - Refund on rejected song/TTS.
@@ -127,7 +139,7 @@ Goal: viewer acts → stream reacts in seconds. Lurkers should have a button, no
 - TTS: Worker queues → overlay or a local helper (Streamer.bot / browser TTS) plays audio.
 - Music: store URL + title; never autoplay untrusted audio without a queue.
 - Filter TTS/song text (length, links, banned words).
-- Overlay and panel must stay on the **same channel room** (already: last Twitch Extension room, not DevViewer `local`).
+- Overlay and panel must stay on the **same channel room** (already: last Twitch Extension room, not DevViewer `local`). Video overlay HUD uses the same `/api/viewer/*` room as the panel.
 
 ---
 

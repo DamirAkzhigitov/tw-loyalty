@@ -23,7 +23,7 @@ A simple browser UI (not the Twitch panel) to manage the queue, toggle rewards, 
 | **Toys** | Start poll; edit wheel segments |
 | **Danger** | Reset room (confirm) |
 
-Hosted as Worker static asset: `/admin/` with `?channel=`.
+Hosted as Worker static asset: `/admin/?channel={id}&password={ADMIN_SECRET}`. The page sends `X-Admin-Secret`.
 
 ---
 
@@ -53,7 +53,7 @@ Panel session already returns `rewards` — serve effective list there.
 
 ## Open questions
 
-1. Secret-in-URL vs header-only? (Lean: header + localStorage on admin device; never put secret in OBS URLs.)
+1. Secret-in-URL: implemented (`?password=` + header). Bookmark on the streamer device only; never put this URL in OBS.
 2. Mod access: same secret, or Twitch role check?
 3. Mobile-friendly admin for phone-from-couch?
 4. Separate “producer” machine URL vs same Worker?
